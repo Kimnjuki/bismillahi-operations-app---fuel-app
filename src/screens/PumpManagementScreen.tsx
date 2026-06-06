@@ -1,0 +1,517 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  SafeAreaView,
+  Alert,
+  Modal,
+  RefreshControl,
+} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../context/AuthContext';
+import { useNavigation } from '@react-navigation/native';
+import { stationService } from '../services/stationService';
+import { pumpService } from '../services/pumpService';
+import { Station, Pump } from '../types';
+
+export default function PumpManagementScreen() {
+  const { appUser } = useAuth();
+  const navigation = useNavigation();
+  const [stations, setStations] = useState<Station[]>([]);
+  const [selectedStation, setSelectedStation] = useState<Station | null>(null);
+  const [pumps, setPumps] = useState<Pump[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [showStationPicker, setShowStationPicker] = useState(false);
+
+  // Sample data
+  const sampleStations: Station[] = [
+    {
+      id: '1',
+      name: 'ISSIRO STATION',
+      code: 'ISS001',
+      station_name: 'ISSIRO STATION',
+      station_code: 'ISS001',
+      location: 'Issiro, DRC',
+      system_type: 'pump',
+      usd_support: true,
+      is_active: true,
+      created_by: appUser?.id || '',
+      created_at: new Date().toISOString(),
+      capacity_liters: 10000,
+      current_stock: 7500,
+    },
+    {
+      id: '2',
+      name: 'DURBA STATION',
+      code: 'DUR001',
+      station_name: 'DURBA STATION',
+      station_code: 'DUR001',
+      location: 'Durba, DRC',
+      system_type: 'pump',
+      usd_support: false,
+      is_active: true,
+      created_by: appUser?.id || '',
+      created_at: new Date().toISOString(),
+      capacity_liters: 8000,
+      current_stock: 6000,
+    },
+  ];
+
+  const samplePumps: Pump[] = [
+    {
+      id: '1',
+      name: 'Pump 1',
+      pump_number: 1,
+      fuel_type: 'PMS',
+      station_id: '1',
+      is_active: true,
+      created_by: appUser?.id || '',
+      created_at: new Date().toISOString(),
+    },
+    {
+      id: '2',
+      name: 'Pump 2',
+      pump_number: 2,
+      fuel_type: 'AGO',
+      station_id: '1',
+      is_active: true,
+      created_by: appUser?.id || '',
+      created_at: new Date().toISOString(),
+    },
+    {
+      id: '3',
+      name: 'Pump 3',
+      pump_number: 3,
+      fuel_type: 'PMS',
+      station_id: '1',
+      is_active: true,
+      created_by: appUser?.id || '',
+      created_at: new Date().toISOString(),
+    },
+    {
+      id: '4',
+      name: 'Pump 4',
+      pump_number: 4,
+      fuel_type: 'AGO',
+      station_id: '1',
+      is_active: true,
+      created_by: appUser?.id || '',
+      created_at: new Date().toISOString(),
+    },
+  ];
+
+  const loadStations = useCallback(async () => {
+    try {
+      const response = await stationService.getStations();
+      if (response.success && response.data) {
+        setStations(response.data);
+        if (response.data.length > 0 && !selectedStation) {
+          setSelectedStation(response.data[0]);
+        }
+      } else {
+        setStations(sampleStations);
+        if (!selectedStation) {
+          setSelectedStation(sampleStations[0]);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading stations:', error);
+      setStations(sampleStations);
+      if (!selectedStation) {
+        setSelectedStation(sampleStations[0]);
+      }
+    }
+  }, [sampleStations, selectedStation]);
+
+  const loadPumps = useCallback(async () => {
+    if (!selectedStation) return;
+
+    try {
+      setLoading(true);
+      const response = await pumpService.getPumpsByStation(selectedStation.id);
+      if (response.success && response.data) {
+        setPumps(response.data);
+      } else {
+        // Use sample data for the selected station
+        const stationPumps = samplePumps.filter(pump => pump.station_id === selectedStation.id);
+        setPumps(stationPumps);
+      }
+    } catch (error) {
+      console.error('Error loading pumps:', error);
+      const stationPumps = samplePumps.filter(pump => pump.station_id === selectedStation.id);
+      setPumps(stationPumps);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [selectedStation, samplePumps]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadPumps();
+  }, [loadPumps]);
+
+  const handleAddPump = () => {
+    if (!selectedStation) {
+      Alert.alert('Error', 'Please select a station first');
+      return;
+    }
+
+    if (!appUser || appUser.role !== 'admin') {
+      Alert.alert('Access Denied', 'Only administrators can add pumps');
+      return;
+    }
+
+    (navigation as any).navigate('AddPump', { stationId: selectedStation.id });
+  };
+
+  const handleEditPump = (pump: Pump) => {
+    if (!appUser || appUser.role !== 'admin') {
+      Alert.alert('Access Denied', 'Only administrators can edit pumps');
+      return;
+    }
+
+    (navigation as any).navigate('AddPump', { 
+      stationId: selectedStation?.id || '', 
+      pump: pump 
+    });
+  };
+
+  const handleDeletePump = async (pump: Pump) => {
+    if (!appUser || appUser.role !== 'admin') {
+      Alert.alert('Access Denied', 'Only administrators can delete pumps');
+      return;
+    }
+
+    Alert.alert(
+      'Delete Pump',
+      `Are you sure you want to delete ${pump.name}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const response = await pumpService.deletePump(pump.id);
+              if (response.success) {
+                setPumps(prev => prev.filter(p => p.id !== pump.id));
+                Alert.alert('Success', 'Pump deleted successfully');
+              } else {
+                Alert.alert('Error', response.error || 'Failed to delete pump');
+              }
+            } catch (error) {
+              console.error('Error deleting pump:', error);
+              Alert.alert('Error', 'Failed to delete pump');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const getFuelTypeColor = (fuelType: string) => {
+    switch (fuelType) {
+      case 'PMS':
+        return '#FF6B35';
+      case 'AGO':
+        return '#4CAF50';
+      case 'DPK':
+        return '#2196F3';
+      case 'LPG':
+        return '#FF9800';
+      default:
+        return '#F0C38E';
+    }
+  };
+
+  useEffect(() => {
+    loadStations();
+  }, [loadStations]);
+
+  useEffect(() => {
+    loadPumps();
+  }, [loadPumps]);
+
+  return (
+    <LinearGradient colors={['#312C51', '#48426D']} style={styles.container}>
+      <SafeAreaView style={styles.safeArea}>
+        <ScrollView 
+          style={styles.content} 
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+        >
+          {/* Header */}
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => navigation.goBack()}>
+              <Ionicons name="arrow-back" size={24} color="#ffffff" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Pump Management</Text>
+            <View style={styles.headerSpacer} />
+          </View>
+
+          {/* Station Selector */}
+          <View style={styles.stationSelector}>
+            <TouchableOpacity 
+              style={styles.stationButton}
+              onPress={() => setShowStationPicker(true)}
+            >
+              <Text style={styles.stationButtonText}>
+                {selectedStation ? selectedStation.name : 'Select Station'}
+              </Text>
+              <Ionicons name="swap-vertical" size={20} color="#F0C38E" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Pumps List */}
+          <View style={styles.pumpsList}>
+            {pumps.map((pump) => (
+              <View key={pump.id} style={styles.pumpCard}>
+                <View style={styles.pumpInfo}>
+                  <Text style={styles.pumpName}>{pump.name}</Text>
+                  <Text style={[styles.fuelType, { color: getFuelTypeColor(pump.fuel_type) }]}>
+                    {pump.fuel_type}
+                  </Text>
+                </View>
+                <View style={styles.pumpActions}>
+                  <TouchableOpacity 
+                    style={styles.actionButton}
+                    onPress={() => handleEditPump(pump)}
+                  >
+                    <Ionicons name="pencil" size={20} color="#F0C38E" />
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.actionButton}
+                    onPress={() => handleDeletePump(pump)}
+                  >
+                    <Ionicons name="trash" size={20} color="#F0C38E" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
+          </View>
+
+          {/* Add New Pump Button */}
+          <View style={styles.addButtonContainer}>
+            <TouchableOpacity 
+              style={styles.addButton}
+              onPress={handleAddPump}
+            >
+              <Ionicons name="add" size={24} color="#ffffff" />
+              <Text style={styles.addButtonText}>Add New Pump</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+
+        {/* Station Picker Modal */}
+        <Modal
+          visible={showStationPicker}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowStationPicker(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Select Station</Text>
+              {stations.map((station) => (
+                <TouchableOpacity
+                  key={station.id}
+                  style={[
+                    styles.modalOption,
+                    selectedStation?.id === station.id && styles.modalOptionSelected
+                  ]}
+                  onPress={() => {
+                    setSelectedStation(station);
+                    setShowStationPicker(false);
+                  }}
+                >
+                  <Text style={[
+                    styles.modalOptionText,
+                    selectedStation?.id === station.id && styles.modalOptionTextSelected
+                  ]}>
+                    {station.name}
+                  </Text>
+                  <Text style={styles.modalOptionSubtext}>
+                    {station.code} - {station.location}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => setShowStationPicker(false)}
+              >
+                <Text style={styles.modalCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      </SafeAreaView>
+    </LinearGradient>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  safeArea: {
+    flex: 1,
+  },
+  content: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    flex: 1,
+    textAlign: 'center',
+  },
+  headerSpacer: {
+    width: 24,
+  },
+  stationSelector: {
+    paddingHorizontal: 16,
+    marginBottom: 24,
+  },
+  stationButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  stationButtonText: {
+    fontSize: 16,
+    color: '#ffffff',
+    fontWeight: '500',
+  },
+  pumpsList: {
+    paddingHorizontal: 16,
+    marginBottom: 24,
+  },
+  pumpCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  pumpInfo: {
+    flex: 1,
+  },
+  pumpName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    marginBottom: 4,
+  },
+  fuelType: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  pumpActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  actionButton: {
+    padding: 8,
+  },
+  addButtonContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 32,
+  },
+  addButton: {
+    backgroundColor: '#F0C38E',
+    borderRadius: 12,
+    paddingVertical: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  addButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#ffffff',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#312C51',
+    borderRadius: 15,
+    padding: 20,
+    marginHorizontal: 20,
+    maxHeight: '80%',
+    width: '90%',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  modalOption: {
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  modalOptionSelected: {
+    backgroundColor: 'rgba(240, 195, 142, 0.2)',
+  },
+  modalOptionText: {
+    fontSize: 16,
+    color: '#ffffff',
+    fontWeight: '500',
+  },
+  modalOptionTextSelected: {
+    color: '#F0C38E',
+  },
+  modalOptionSubtext: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.7)',
+    marginTop: 2,
+  },
+  modalCancelButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  modalCancelButtonText: {
+    fontSize: 16,
+    color: '#ffffff',
+    fontWeight: '500',
+  },
+});
+
+
+

@@ -1,0 +1,25 @@
+This is a TypeScript Expo React Native project for petroleum operations management.
+
+Tech Stack:
+- Expo SDK 54
+- TypeScript
+- React Navigation (Bottom Tabs + Native Stack)
+- React Native Paper (Material Design)
+- Supabase for backend
+- Async Storage for local data
+- Expo Notifications
+
+Coding Standards:
+- Use functional components with hooks
+- Follow TypeScript best practices
+- Use Material Design components from react-native-paper
+- Implement proper error handling
+- Use async/await for asynchronous operations
+- Follow Expo best practices and guidelines
+
+Project Structure:
+- /screens - React Native screens
+- /components - Reusable components
+- /services - API and data services
+- /types - TypeScript type definitions
+- /utils - Utility functions
