@@ -33,27 +33,27 @@ export default function ExchangeRateScreen() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Sample data with correct rate: 1 USD = 2880 CDF
+  // Sample data with default rate: 1 USD = 2300 CDF
   const sampleRates: ExchangeRate[] = [
     {
       id: '1',
-      rate: 2880,
-      effective_date: '2024-07-26',
+      rate: 2300,
+      effective_date: new Date().toISOString().split('T')[0],
       created_at: new Date().toISOString(),
       created_by: appUser?.id || '',
     },
     {
       id: '2',
-      rate: 2880,
-      effective_date: '2024-07-25',
-      created_at: new Date().toISOString(),
+      rate: 2300,
+      effective_date: new Date(Date.now() - 86400000).toISOString().split('T')[0],
+      created_at: new Date(Date.now() - 86400000).toISOString(),
       created_by: appUser?.id || '',
     },
     {
       id: '3',
-      rate: 2880,
-      effective_date: '2024-07-24',
-      created_at: new Date().toISOString(),
+      rate: 2300,
+      effective_date: new Date(Date.now() - 172800000).toISOString().split('T')[0],
+      created_at: new Date(Date.now() - 172800000).toISOString(),
       created_by: appUser?.id || '',
     },
   ];

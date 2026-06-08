@@ -73,7 +73,7 @@ export default function PinSetupScreen() {
   const proceedWithPin = async () => {
     try {
       setLoading(true);
-      await setupPin({ user_code: '', pin, confirm_pin: pin });
+      await setupPin({ user_code: '', pin, confirm_pin: confirmPin });
       Alert.alert(
         'PIN Setup Complete',
         'Your PIN has been set successfully. You can now use it to access the app.',

@@ -273,8 +273,11 @@ class NotificationService {
           type: notification.type,
           title: notification.title,
           message: notification.description,
+          description: notification.description,
           data: notification.actionData,
           station_id: notification.stationId,
+          priority: notification.priority || 'medium',
+          user_id: null,
         });
 
       if (error) {

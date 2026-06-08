@@ -48,7 +48,9 @@ export default function PinLoginScreen() {
   };
 
   const {
-    validate,
+    errors,
+    touched,
+    validate: validateForm,
     validateField,
     setFieldTouched,
     hasError,
@@ -78,18 +80,18 @@ export default function PinLoginScreen() {
       setFieldTouched('userCode');
       setFieldTouched('pin');
 
-      const isValid = await validate({ userCode, pin });
+      const validationResult = validateForm({ userCode, pin });
 
-      if (!isValid) {
+      if (!validationResult.isValid) {
         Alert.alert('Validation Error', 'Please fix the errors and try again');
         return;
       }
 
       // Attempt to sign in with PIN
-      const result = await signIn({ user_code: userCode, pin });
+      const signInResult = await signIn({ user_code: userCode, pin });
       
-      if (result.error) {
-        Alert.alert('Login Failed', result.error.message || 'Invalid user code or PIN');
+      if (signInResult.error) {
+        Alert.alert('Login Failed', signInResult.error.message || 'Invalid user code or PIN');
       } else {
         // Navigation will be handled by the auth state change
         console.log('Login successful');
@@ -112,17 +114,17 @@ export default function PinLoginScreen() {
 
   const handleBiometricLogin = async () => {
     try {
-      const result = await biometricService.authenticate('Use biometric to login');
+      const biometricResult = await biometricService.authenticate('Use biometric to login');
       
-      if (result.success) {
+      if (biometricResult.success) {
         // For demo purposes, use admin credentials
-        const result = await signIn({ user_code: 'A001', pin: '1234' });
+        const signInResult = await signIn({ user_code: 'A001', pin: '1234' });
         
-        if (result.error) {
-          Alert.alert('Biometric Login Failed', result.error.message || 'Authentication failed');
+        if (signInResult.error) {
+          Alert.alert('Biometric Login Failed', signInResult.error.message || 'Authentication failed');
         }
       } else {
-        Alert.alert('Biometric Authentication Failed', result.error || 'Please try again');
+        Alert.alert('Biometric Authentication Failed', biometricResult.error || 'Please try again');
       }
     } catch (error) {
       console.error('Biometric login error:', error);

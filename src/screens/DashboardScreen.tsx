@@ -229,10 +229,12 @@ export default function DashboardScreen() {
       // Fetch stock alerts
       const { data: stockData } = await supabase
         .from('stock_items')
-        .select('current_stock, minimum_stock')
-        .lt('current_stock', 'minimum_stock');
+        .select('current_stock, minimum_stock');
 
-      const stockAlerts = stockData?.length || 0;
+      // Filter in JS since PostgREST doesn't support column-to-column comparisons
+      const stockAlerts = stockData?.filter(item => 
+        (item.current_stock || 0) < (item.minimum_stock || 0)
+      ).length || 0;
 
       // Fetch pending transfers
       const { data: transfersData } = await supabase
@@ -421,7 +423,7 @@ export default function DashboardScreen() {
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.quickActionButton}
-              onPress={() => handleMenuPress(menuItems[5])} // Reports
+              onPress={() => handleMenuPress(menuItems[11])} // Reports
             >
               <Text style={styles.quickActionIcon}>📊</Text>
               <Text style={styles.quickActionText}>View Reports</Text>

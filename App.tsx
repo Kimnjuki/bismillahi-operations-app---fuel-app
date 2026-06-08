@@ -17,14 +17,12 @@ import { notificationService } from './src/services/notificationService';
 import { loggingService } from './src/services/loggingService';
 
 // Screens
-import SplashScreenComponent from './src/screens/SplashScreen';
-import WelcomeOnboardingScreen from './src/screens/WelcomeOnboardingScreen';
 import PinLoginScreen from './src/screens/PinLoginScreen';
 import PinSetupScreen from './src/screens/PinSetupScreen';
+import WelcomeOnboardingScreen from './src/screens/WelcomeOnboardingScreen';
 import WelcomeScreen from './src/screens/WelcomeScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
 import SalesEntryScreen from './src/screens/SalesEntryScreen';
-import SalesReceiptScreen from './src/screens/SalesReceiptScreen';
 import UnifiedSalesReceiptScreen from './src/screens/UnifiedSalesReceiptScreen';
 import StockManagementScreen from './src/screens/StockManagementScreen';
 import ExpenseScreen from './src/screens/ExpenseScreen';
@@ -99,368 +97,368 @@ function AppNavigation() {
     return <LoadingScreen />;
   }
 
+  // Determine initial route based on auth state
+  // Note: All screens are always registered, but the initial route
+  // and conditional logic determine which screens are accessible
+  const isLoggedIn = isAuthenticated && !!appUser;
+
   return (
     <NavigationContainer>
       <Stack.Navigator
-        initialRouteName="PinLogin"
+        initialRouteName={isLoggedIn ? 'Dashboard' : 'PinLogin'}
         screenOptions={{
           headerShown: false,
           gestureEnabled: true,
           animation: 'slide_from_right',
         }}
       >
-        {!isAuthenticated ? (
-          <>
-            <Stack.Screen
-              name="PinLogin"
-              component={PinLoginScreen}
-              options={{ gestureEnabled: false }}
-            />
-            <Stack.Screen
-              name="PinSetup"
-              component={PinSetupScreen}
-              options={{
-                title: 'Setup PIN',
-                headerShown: true,
-                headerStyle: { backgroundColor: '#667eea' },
-                headerTintColor: '#ffffff',
-                headerTitleStyle: { fontWeight: 'bold' },
-              }}
-            />
-          </>
-        ) : !appUser ? (
-          <Stack.Screen name="Loading" component={LoadingScreen} />
-        ) : (
-          <>
-            <Stack.Screen
-              name="WelcomeOnboarding"
-              component={WelcomeOnboardingScreen}
-              options={{ gestureEnabled: false }}
-            />
-            <Stack.Screen 
-              name="Welcome" 
-              component={WelcomeScreen}
-              options={{ gestureEnabled: false }}
-            />
-            <Stack.Screen 
-              name="Dashboard" 
-              component={DashboardScreen}
-              options={{ 
-                gestureEnabled: false,
-                title: 'Dashboard',
-                headerShown: true,
-                headerStyle: { backgroundColor: '#667eea' },
-                headerTintColor: '#ffffff',
-                headerTitleStyle: { fontWeight: 'bold' },
-              }}
-            />
-            <Stack.Screen
-              name="Expense"
-              component={ExpenseScreen}
-              options={{
-                title: 'Expense Management',
-                headerShown: true,
-                headerStyle: { backgroundColor: '#312C51' },
-                headerTintColor: '#ffffff',
-                headerTitleStyle: { fontWeight: 'bold' },
-              }}
-            />
-            <Stack.Screen
-              name="ExpenseHomepage"
-              component={ExpenseHomepageScreen}
-              options={{ title: 'Expenses', headerShown: false }}
-            />
-            <Stack.Screen
-              name="ExpenseHistory"
-              component={ExpenseHistoryScreen}
-              options={{ title: 'Expense History', headerShown: false }}
-            />
-            <Stack.Screen
-              name="ExpenseEntry"
-              component={ExpenseEntryScreen}
-              options={{ title: 'Add Expenses', headerShown: false }}
-            />
-            <Stack.Screen
-              name="ExpenseOnboarding"
-              component={ExpenseOnboardingScreen}
-              options={{ title: 'Expense Onboarding', headerShown: false }}
-            />
-            <Stack.Screen
-              name="DailyConsolidatedReport"
-              component={DailyConsolidatedReportScreen}
-              options={{ title: 'Daily Consolidated Report', headerShown: false }}
-            />
-            <Stack.Screen
-              name="Analytics"
-              component={AnalyticsScreen}
-              options={{ title: 'Analytics', headerShown: false }}
-            />
-            <Stack.Screen
-              name="Notifications"
-              component={NotificationsScreen}
-              options={{ title: 'Notifications', headerShown: false }}
-            />
-            <Stack.Screen 
-              name="UserManagement" 
-              component={UserManagementScreen}
-              options={{ 
-                title: 'User Management',
-                headerShown: true,
-                headerStyle: { backgroundColor: '#667eea' },
-                headerTintColor: '#ffffff',
-                headerTitleStyle: { fontWeight: 'bold' },
-              }}
-            />
-            <Stack.Screen 
-              name="AdminUserManagement" 
-              component={AdminUserManagementScreen}
-              options={{ 
-                title: 'Admin User Management',
-                headerShown: true,
-                headerStyle: { backgroundColor: '#667eea' },
-                headerTintColor: '#ffffff',
-                headerTitleStyle: { fontWeight: 'bold' },
-              }}
-            />
-            <Stack.Screen
-              name="SalesEntry"
-              component={SalesEntryScreen}
-              options={{
-                title: 'Sales Management',
-                headerShown: true,
-                headerStyle: { backgroundColor: '#312C51' },
-                headerTintColor: '#ffffff',
-                headerTitleStyle: { fontWeight: 'bold' },
-              }}
-            />
-            <Stack.Screen
-              name="SalesReceipt"
-              component={UnifiedSalesReceiptScreen}
-              options={{ title: 'Unified Sales Receipt', headerShown: false }}
-            />
-            <Stack.Screen 
-              name="StockManagement" 
-              component={StockManagementScreen}
-              options={{ 
-                title: 'Stock Management',
-                headerShown: true,
-                headerStyle: { backgroundColor: '#667eea' },
-                headerTintColor: '#ffffff',
-                headerTitleStyle: { fontWeight: 'bold' },
-              }}
-            />
-            <Stack.Screen 
-              name="FundTransfer" 
-              component={FundTransferScreen}
-              options={{ 
-                title: 'Fund Transfer',
-                headerShown: true,
-                headerStyle: { backgroundColor: '#667eea' },
-                headerTintColor: '#ffffff',
-                headerTitleStyle: { fontWeight: 'bold' },
-              }}
-            />
-            <Stack.Screen 
-              name="NewTransfer" 
-              component={NewTransferScreen}
-              options={{ title: 'Transfer Funds', headerShown: false }}
-            />
-            <Stack.Screen 
-              name="ExchangeRate" 
-              component={ExchangeRateScreen}
-              options={{ 
-                title: 'Exchange Rate',
-                headerShown: true,
-                headerStyle: { backgroundColor: '#667eea' },
-                headerTintColor: '#ffffff',
-                headerTitleStyle: { fontWeight: 'bold' },
-              }}
-            />
-            <Stack.Screen 
-              name="Reports" 
-              component={ReportsScreen}
-              options={{ 
-                title: 'Reports',
-                headerShown: true,
-                headerStyle: { backgroundColor: '#667eea' },
-                headerTintColor: '#ffffff',
-                headerTitleStyle: { fontWeight: 'bold' },
-              }}
-            />
-            <Stack.Screen 
-              name="Settings" 
-              component={SettingsScreen}
-              options={{ 
-                title: 'Settings',
-                headerShown: true,
-                headerStyle: { backgroundColor: '#667eea' },
-                headerTintColor: '#ffffff',
-                headerTitleStyle: { fontWeight: 'bold' },
-              }}
-            />
-            <Stack.Screen 
-              name="Security" 
-              component={SecurityScreen}
-              options={{ 
-                title: 'Security Center',
-                headerShown: true,
-                headerStyle: { backgroundColor: '#667eea' },
-                headerTintColor: '#ffffff',
-                headerTitleStyle: { fontWeight: 'bold' },
-              }}
-            />
-            <Stack.Screen 
-              name="AssetManagement" 
-              component={AssetManagementScreen}
-              options={{ 
-                title: 'Asset Management',
-                headerShown: true,
-                headerStyle: { backgroundColor: '#667eea' },
-                headerTintColor: '#ffffff',
-                headerTitleStyle: { fontWeight: 'bold' },
-              }}
-            />
-            <Stack.Screen 
-              name="Help" 
-              component={HelpScreen}
-              options={{ 
-                title: 'Help Center',
-                headerShown: true,
-                headerStyle: { backgroundColor: '#667eea' },
-                headerTintColor: '#ffffff',
-                headerTitleStyle: { fontWeight: 'bold' },
-              }}
-            />
-            <Stack.Screen 
-              name="HelpTopicDetail" 
-              component={HelpTopicDetailScreen}
-              options={{ 
-                title: 'Help Topic',
-                headerShown: true,
-                headerStyle: { backgroundColor: '#667eea' },
-                headerTintColor: '#ffffff',
-                headerTitleStyle: { fontWeight: 'bold' },
-              }}
-            />
-            <Stack.Screen 
-              name="Onboarding" 
-              component={OnboardingScreen}
-              options={{ 
-                title: 'Getting Started',
-                headerShown: true,
-                headerStyle: { backgroundColor: '#667eea' },
-                headerTintColor: '#ffffff',
-                headerTitleStyle: { fontWeight: 'bold' },
-              }}
-            />
-            <Stack.Screen 
-              name="LoggingDashboard" 
-              component={LoggingDashboardScreen}
-              options={{ 
-                title: 'Logging Dashboard',
-                headerShown: true,
-                headerStyle: { backgroundColor: '#667eea' },
-                headerTintColor: '#ffffff',
-                headerTitleStyle: { fontWeight: 'bold' },
-              }}
-            />
-            <Stack.Screen 
-              name="Accounts" 
-              component={AccountsScreen}
-              options={{ title: 'Accounts', headerShown: false }}
-            />
-            <Stack.Screen 
-              name="AccountsManagement" 
-              component={AccountsManagementScreen}
-              options={{ title: 'Accounts Management', headerShown: false }}
-            />
-            <Stack.Screen 
-              name="OperationalAccounts" 
-              component={OperationalAccountsScreen}
-              options={{ title: 'Operational Accounts', headerShown: false }}
-            />
-            <Stack.Screen 
-              name="AccountReceivables" 
-              component={AccountReceivablesScreen}
-              options={{ title: 'Account Receivables', headerShown: false }}
-            />
-            <Stack.Screen 
-              name="AccountPayables" 
-              component={AccountPayablesScreen}
-              options={{ title: 'Account Payables', headerShown: false }}
-            />
-            <Stack.Screen 
-              name="AddAccount" 
-              component={AddAccountScreen}
-              options={{ title: 'Add Account', headerShown: false }}
-            />
-            <Stack.Screen 
-              name="AccountReceivablesHistory" 
-              component={AccountReceivablesHistoryScreen}
-              options={{ title: 'Receivables History', headerShown: false }}
-            />
-            <Stack.Screen 
-              name="AccountPayablesHistory" 
-              component={AccountPayablesHistoryScreen}
-              options={{ title: 'Payables History', headerShown: false }}
-            />
-            <Stack.Screen 
-              name="CreditorsSuppliers" 
-              component={CreditorsSuppliersScreen}
-              options={{ title: 'Creditors & Suppliers', headerShown: false }}
-            />
-            <Stack.Screen
-              name="AddCreditorSupplier"
-              component={AddCreditorSupplierScreen}
-              options={{ title: 'Add Creditor/Supplier', headerShown: false }}
-            />
-            <Stack.Screen
-              name="StationSettings"
-              component={StationSettingsScreen}
-              options={{ title: 'Station Settings', headerShown: false }}
-            />
-            <Stack.Screen
-              name="PumpManagement"
-              component={PumpManagementScreen}
-              options={{ title: 'Pump Management', headerShown: false }}
-            />
-            <Stack.Screen
-              name="AddPump"
-              component={AddPumpScreen}
-              options={{ title: 'Add Pump', headerShown: false }}
-            />
-            <Stack.Screen
-              name="PumpDippingManagement"
-              component={PumpDippingManagementScreen}
-              options={{ title: 'Pump Dipping Management', headerShown: false }}
-            />
-            <Stack.Screen 
-              name="FuelDelivery" 
-              component={FuelDeliveryScreen}
-              options={{ title: 'Fuel Delivery', headerShown: false }}
-            />
-            <Stack.Screen 
-              name="TransporterManagement" 
-              component={TransporterManagementScreen}
-              options={{ title: 'Transporter Management', headerShown: false }}
-            />
-            <Stack.Screen 
-              name="TaxPayment" 
-              component={TaxPaymentScreen}
-              options={{ title: 'Tax Payment', headerShown: false }}
-            />
-            <Stack.Screen 
-              name="TruckTransactionHistory" 
-              component={TruckTransactionHistoryScreen}
-              options={{ title: 'Truck Transaction History', headerShown: false }}
-            />
-            <Stack.Screen 
-              name="AddTransporter" 
-              component={AddTransporterScreen}
-              options={{ title: 'Add Transporter', headerShown: false }}
-            />
-          </>
-        )}
+        {/* Auth screens - always available */}
+        <Stack.Screen
+          name="PinLogin"
+          component={PinLoginScreen}
+          options={{ gestureEnabled: false }}
+        />
+        <Stack.Screen
+          name="PinSetup"
+          component={PinSetupScreen}
+          options={{
+            title: 'Setup PIN',
+            headerShown: true,
+            headerStyle: { backgroundColor: '#667eea' },
+            headerTintColor: '#ffffff',
+            headerTitleStyle: { fontWeight: 'bold' },
+          }}
+        />
+        <Stack.Screen name="Loading" component={LoadingScreen} />
+
+        {/* Authenticated app screens */}
+        <Stack.Screen
+          name="WelcomeOnboarding"
+          component={WelcomeOnboardingScreen}
+          options={{ gestureEnabled: false }}
+        />
+        <Stack.Screen
+          name="Welcome"
+          component={WelcomeScreen}
+          options={{ gestureEnabled: false }}
+        />
+        <Stack.Screen
+          name="Dashboard"
+          component={DashboardScreen}
+          options={{
+            gestureEnabled: false,
+            title: 'Dashboard',
+            headerShown: true,
+            headerStyle: { backgroundColor: '#667eea' },
+            headerTintColor: '#ffffff',
+            headerTitleStyle: { fontWeight: 'bold' },
+          }}
+        />
+        <Stack.Screen
+          name="Expense"
+          component={ExpenseScreen}
+          options={{
+            title: 'Expense Management',
+            headerShown: true,
+            headerStyle: { backgroundColor: '#312C51' },
+            headerTintColor: '#ffffff',
+            headerTitleStyle: { fontWeight: 'bold' },
+          }}
+        />
+        <Stack.Screen
+          name="ExpenseHomepage"
+          component={ExpenseHomepageScreen}
+          options={{ title: 'Expenses', headerShown: false }}
+        />
+        <Stack.Screen
+          name="ExpenseHistory"
+          component={ExpenseHistoryScreen}
+          options={{ title: 'Expense History', headerShown: false }}
+        />
+        <Stack.Screen
+          name="ExpenseEntry"
+          component={ExpenseEntryScreen}
+          options={{ title: 'Add Expenses', headerShown: false }}
+        />
+        <Stack.Screen
+          name="ExpenseOnboarding"
+          component={ExpenseOnboardingScreen}
+          options={{ title: 'Expense Onboarding', headerShown: false }}
+        />
+        <Stack.Screen
+          name="DailyConsolidatedReport"
+          component={DailyConsolidatedReportScreen}
+          options={{ title: 'Daily Consolidated Report', headerShown: false }}
+        />
+        <Stack.Screen
+          name="Analytics"
+          component={AnalyticsScreen}
+          options={{ title: 'Analytics', headerShown: false }}
+        />
+        <Stack.Screen
+          name="Notifications"
+          component={NotificationsScreen}
+          options={{ title: 'Notifications', headerShown: false }}
+        />
+        <Stack.Screen
+          name="UserManagement"
+          component={UserManagementScreen}
+          options={{
+            title: 'User Management',
+            headerShown: true,
+            headerStyle: { backgroundColor: '#667eea' },
+            headerTintColor: '#ffffff',
+            headerTitleStyle: { fontWeight: 'bold' },
+          }}
+        />
+        <Stack.Screen
+          name="AdminUserManagement"
+          component={AdminUserManagementScreen}
+          options={{
+            title: 'Admin User Management',
+            headerShown: true,
+            headerStyle: { backgroundColor: '#667eea' },
+            headerTintColor: '#ffffff',
+            headerTitleStyle: { fontWeight: 'bold' },
+          }}
+        />
+        <Stack.Screen
+          name="SalesEntry"
+          component={SalesEntryScreen}
+          options={{
+            title: 'Sales Management',
+            headerShown: true,
+            headerStyle: { backgroundColor: '#312C51' },
+            headerTintColor: '#ffffff',
+            headerTitleStyle: { fontWeight: 'bold' },
+          }}
+        />
+        <Stack.Screen
+          name="SalesReceipt"
+          component={UnifiedSalesReceiptScreen}
+          options={{ title: 'Unified Sales Receipt', headerShown: false }}
+        />
+        <Stack.Screen
+          name="StockManagement"
+          component={StockManagementScreen}
+          options={{
+            title: 'Stock Management',
+            headerShown: true,
+            headerStyle: { backgroundColor: '#667eea' },
+            headerTintColor: '#ffffff',
+            headerTitleStyle: { fontWeight: 'bold' },
+          }}
+        />
+        <Stack.Screen
+          name="FundTransfer"
+          component={FundTransferScreen}
+          options={{
+            title: 'Fund Transfer',
+            headerShown: true,
+            headerStyle: { backgroundColor: '#667eea' },
+            headerTintColor: '#ffffff',
+            headerTitleStyle: { fontWeight: 'bold' },
+          }}
+        />
+        <Stack.Screen
+          name="NewTransfer"
+          component={NewTransferScreen}
+          options={{ title: 'Transfer Funds', headerShown: false }}
+        />
+        <Stack.Screen
+          name="ExchangeRate"
+          component={ExchangeRateScreen}
+          options={{
+            title: 'Exchange Rate',
+            headerShown: true,
+            headerStyle: { backgroundColor: '#667eea' },
+            headerTintColor: '#ffffff',
+            headerTitleStyle: { fontWeight: 'bold' },
+          }}
+        />
+        <Stack.Screen
+          name="Reports"
+          component={ReportsScreen}
+          options={{
+            title: 'Reports',
+            headerShown: true,
+            headerStyle: { backgroundColor: '#667eea' },
+            headerTintColor: '#ffffff',
+            headerTitleStyle: { fontWeight: 'bold' },
+          }}
+        />
+        <Stack.Screen
+          name="Settings"
+          component={SettingsScreen}
+          options={{
+            title: 'Settings',
+            headerShown: true,
+            headerStyle: { backgroundColor: '#667eea' },
+            headerTintColor: '#ffffff',
+            headerTitleStyle: { fontWeight: 'bold' },
+          }}
+        />
+        <Stack.Screen
+          name="Security"
+          component={SecurityScreen}
+          options={{
+            title: 'Security Center',
+            headerShown: true,
+            headerStyle: { backgroundColor: '#667eea' },
+            headerTintColor: '#ffffff',
+            headerTitleStyle: { fontWeight: 'bold' },
+          }}
+        />
+        <Stack.Screen
+          name="AssetManagement"
+          component={AssetManagementScreen}
+          options={{
+            title: 'Asset Management',
+            headerShown: true,
+            headerStyle: { backgroundColor: '#667eea' },
+            headerTintColor: '#ffffff',
+            headerTitleStyle: { fontWeight: 'bold' },
+          }}
+        />
+        <Stack.Screen
+          name="Help"
+          component={HelpScreen}
+          options={{
+            title: 'Help Center',
+            headerShown: true,
+            headerStyle: { backgroundColor: '#667eea' },
+            headerTintColor: '#ffffff',
+            headerTitleStyle: { fontWeight: 'bold' },
+          }}
+        />
+        <Stack.Screen
+          name="HelpTopicDetail"
+          component={HelpTopicDetailScreen}
+          options={{
+            title: 'Help Topic',
+            headerShown: true,
+            headerStyle: { backgroundColor: '#667eea' },
+            headerTintColor: '#ffffff',
+            headerTitleStyle: { fontWeight: 'bold' },
+          }}
+        />
+        <Stack.Screen
+          name="Onboarding"
+          component={OnboardingScreen}
+          options={{
+            title: 'Getting Started',
+            headerShown: true,
+            headerStyle: { backgroundColor: '#667eea' },
+            headerTintColor: '#ffffff',
+            headerTitleStyle: { fontWeight: 'bold' },
+          }}
+        />
+        <Stack.Screen
+          name="LoggingDashboard"
+          component={LoggingDashboardScreen}
+          options={{
+            title: 'Logging Dashboard',
+            headerShown: true,
+            headerStyle: { backgroundColor: '#667eea' },
+            headerTintColor: '#ffffff',
+            headerTitleStyle: { fontWeight: 'bold' },
+          }}
+        />
+        <Stack.Screen
+          name="Accounts"
+          component={AccountsScreen}
+          options={{ title: 'Accounts', headerShown: false }}
+        />
+        <Stack.Screen
+          name="AccountsManagement"
+          component={AccountsManagementScreen}
+          options={{ title: 'Accounts Management', headerShown: false }}
+        />
+        <Stack.Screen
+          name="OperationalAccounts"
+          component={OperationalAccountsScreen}
+          options={{ title: 'Operational Accounts', headerShown: false }}
+        />
+        <Stack.Screen
+          name="AccountReceivables"
+          component={AccountReceivablesScreen}
+          options={{ title: 'Account Receivables', headerShown: false }}
+        />
+        <Stack.Screen
+          name="AccountPayables"
+          component={AccountPayablesScreen}
+          options={{ title: 'Account Payables', headerShown: false }}
+        />
+        <Stack.Screen
+          name="AddAccount"
+          component={AddAccountScreen}
+          options={{ title: 'Add Account', headerShown: false }}
+        />
+        <Stack.Screen
+          name="AccountReceivablesHistory"
+          component={AccountReceivablesHistoryScreen}
+          options={{ title: 'Receivables History', headerShown: false }}
+        />
+        <Stack.Screen
+          name="AccountPayablesHistory"
+          component={AccountPayablesHistoryScreen}
+          options={{ title: 'Payables History', headerShown: false }}
+        />
+        <Stack.Screen
+          name="CreditorsSuppliers"
+          component={CreditorsSuppliersScreen}
+          options={{ title: 'Creditors & Suppliers', headerShown: false }}
+        />
+        <Stack.Screen
+          name="AddCreditorSupplier"
+          component={AddCreditorSupplierScreen}
+          options={{ title: 'Add Creditor/Supplier', headerShown: false }}
+        />
+        <Stack.Screen
+          name="StationSettings"
+          component={StationSettingsScreen}
+          options={{ title: 'Station Settings', headerShown: false }}
+        />
+        <Stack.Screen
+          name="PumpManagement"
+          component={PumpManagementScreen}
+          options={{ title: 'Pump Management', headerShown: false }}
+        />
+        <Stack.Screen
+          name="AddPump"
+          component={AddPumpScreen}
+          options={{ title: 'Add Pump', headerShown: false }}
+        />
+        <Stack.Screen
+          name="PumpDippingManagement"
+          component={PumpDippingManagementScreen}
+          options={{ title: 'Pump Dipping Management', headerShown: false }}
+        />
+        <Stack.Screen
+          name="FuelDelivery"
+          component={FuelDeliveryScreen}
+          options={{ title: 'Fuel Delivery', headerShown: false }}
+        />
+        <Stack.Screen
+          name="TransporterManagement"
+          component={TransporterManagementScreen}
+          options={{ title: 'Transporter Management', headerShown: false }}
+        />
+        <Stack.Screen
+          name="TaxPayment"
+          component={TaxPaymentScreen}
+          options={{ title: 'Tax Payment', headerShown: false }}
+        />
+        <Stack.Screen
+          name="TruckTransactionHistory"
+          component={TruckTransactionHistoryScreen}
+          options={{ title: 'Truck Transaction History', headerShown: false }}
+        />
+        <Stack.Screen
+          name="AddTransporter"
+          component={AddTransporterScreen}
+          options={{ title: 'Add Transporter', headerShown: false }}
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );
@@ -610,3 +608,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 });
+   

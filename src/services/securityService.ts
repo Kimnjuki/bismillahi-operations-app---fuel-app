@@ -294,7 +294,7 @@ class SecurityService {
           user_agent: event.userAgent,
           timestamp: event.timestamp,
           severity: event.severity,
-          metadata: event.metadata,
+          event_data: event.metadata, // DB uses event_data not metadata
         }]);
 
       if (error) {
