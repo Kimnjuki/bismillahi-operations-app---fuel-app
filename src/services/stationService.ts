@@ -14,7 +14,7 @@ class StationService {
         .from('stations')
         .select('*')
         .eq('is_active', true)
-        .order('name', { ascending: true });
+        .order('station_name', { ascending: true });
 
       if (error) throw error;
 

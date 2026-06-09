@@ -27,49 +27,6 @@ export default function AccountReceivablesScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Sample data based on the image
-  const sampleReceivables: AccountReceivable[] = [
-    {
-      id: '1',
-      creditor_name: 'Creditor A',
-      creditor_code: 'CRD001',
-      total_amount: 5000000,
-      currency: 'CDF',
-      due_date: '2024-07-15',
-      status: 'overdue',
-      description: 'Fuel supply payment',
-      created_by: appUser?.id || '',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: '2',
-      creditor_name: 'Creditor B',
-      creditor_code: 'CRD002',
-      total_amount: 2500,
-      currency: 'USD',
-      due_date: '2024-07-20',
-      status: 'pending',
-      description: 'Equipment maintenance',
-      created_by: appUser?.id || '',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: '3',
-      creditor_name: 'Creditor C',
-      creditor_code: 'CRD003',
-      total_amount: 3000000,
-      currency: 'CDF',
-      due_date: '2024-07-25',
-      status: 'pending',
-      description: 'Station supplies',
-      created_by: appUser?.id || '',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-  ];
-
   const loadReceivables = useCallback(async () => {
     try {
       setLoading(true);
@@ -78,18 +35,18 @@ export default function AccountReceivablesScreen() {
       if (response.success && response.data && response.data.length > 0) {
         setReceivables(response.data);
       } else {
-        // Use sample data if no real data
-        setReceivables(sampleReceivables);
+        // No real data - show empty state
+        setReceivables([]);
       }
     } catch (error) {
       console.error('Error loading receivables:', error);
-      // Use sample data on error
-      setReceivables(sampleReceivables);
+      // Show empty state on error instead of fake data
+      setReceivables([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [sampleReceivables]);
+  }, []);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);

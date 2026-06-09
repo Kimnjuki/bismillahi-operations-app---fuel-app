@@ -43,26 +43,26 @@ class InternalAccountService {
         .order('account_name', { ascending: true });
 
       if (error) {
-        console.log('Supabase error, using sample data:', error.message);
-        // Return sample data if Supabase fails
+        console.log('Supabase error fetching accounts:', error.message);
+        // Return empty array with error logged - no sample data masking
         return {
-          data: this.getSampleAccounts(),
-          error: null,
-          success: true,
+          data: null,
+          error: error.message,
+          success: false,
         };
       }
 
       return {
-        data: data || this.getSampleAccounts(),
+        data: data || [],
         error: null,
         success: true,
       };
     } catch (error) {
       console.error('Error fetching internal accounts:', error);
       return {
-        data: this.getSampleAccounts(),
+        data: null,
         error: error instanceof Error ? error.message : 'Unknown error',
-        success: true, // Still return sample data
+        success: false,
       };
     }
   }
@@ -112,25 +112,25 @@ class InternalAccountService {
         .order('station_name', { ascending: true });
 
       if (error) {
-        console.log('Supabase stations error, using sample data:', error.message);
+        console.log('Supabase stations error:', error.message);
         return {
-          data: this.getSampleStations(),
-          error: null,
-          success: true,
+          data: null,
+          error: error.message,
+          success: false,
         };
       }
 
       return {
-        data: data || this.getSampleStations(),
+        data: data || [],
         error: null,
         success: true,
       };
     } catch (error) {
       console.error('Error fetching stations:', error);
       return {
-        data: this.getSampleStations(),
+        data: null,
         error: error instanceof Error ? error.message : 'Unknown error',
-        success: true, // Still return sample data
+        success: false,
       };
     }
   }

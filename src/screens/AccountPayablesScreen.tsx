@@ -27,49 +27,6 @@ export default function AccountPayablesScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Sample data for debtors
-  const samplePayables: AccountPayable[] = [
-    {
-      id: '1',
-      debtor_name: 'Debtor A',
-      debtor_code: 'DBT001',
-      total_amount: 2000000,
-      currency: 'CDF',
-      due_date: '2024-07-18',
-      status: 'pending',
-      description: 'Fuel delivery payment',
-      created_by: appUser?.id || '',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: '2',
-      debtor_name: 'Debtor B',
-      debtor_code: 'DBT002',
-      total_amount: 1500,
-      currency: 'USD',
-      due_date: '2024-07-22',
-      status: 'overdue',
-      description: 'Service charges',
-      created_by: appUser?.id || '',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: '3',
-      debtor_name: 'Debtor C',
-      debtor_code: 'DBT003',
-      total_amount: 4000000,
-      currency: 'CDF',
-      due_date: '2024-07-28',
-      status: 'pending',
-      description: 'Equipment purchase',
-      created_by: appUser?.id || '',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-  ];
-
   const loadPayables = useCallback(async () => {
     try {
       setLoading(true);
@@ -78,18 +35,18 @@ export default function AccountPayablesScreen() {
       if (response.success && response.data && response.data.length > 0) {
         setPayables(response.data);
       } else {
-        // Use sample data if no real data
-        setPayables(samplePayables);
+        // No real data - show empty state
+        setPayables([]);
       }
     } catch (error) {
       console.error('Error loading payables:', error);
-      // Use sample data on error
-      setPayables(samplePayables);
+      // Show empty state on error instead of fake data
+      setPayables([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [samplePayables]);
+  }, []);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
