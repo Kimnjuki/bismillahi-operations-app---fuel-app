@@ -69,24 +69,10 @@ class SecurityMiddleware {
   // Intercept and validate API responses
   async interceptResponse(response: ApiResponse, request: ApiRequest): Promise<ApiResponse> {
     try {
-      // Log successful API calls
-      if (response.status >= 200 && response.status < 300) {
-        await securityService.logSecurityEvent({
-          eventType: 'DATA_ACCESS',
-          description: `API call successful: ${request.method} ${request.url}`,
-          severity: 'LOW',
-          metadata: { 
-            userId: request.userId, 
-            method: request.method, 
-            url: request.url,
-            status: response.status 
-          },
-        });
-      }
-
-      // Log failed API calls
+      // Non-blocking logging - don't await these to avoid startup delays
+      // Only log security violations (failed calls), skip routine success logging
       if (response.status >= 400) {
-        await securityService.logSecurityEvent({
+        securityService.logSecurityEvent({
           eventType: 'SECURITY_VIOLATION',
           description: `API call failed: ${request.method} ${request.url}`,
           severity: response.status >= 500 ? 'HIGH' : 'MEDIUM',
@@ -97,7 +83,7 @@ class SecurityMiddleware {
             status: response.status,
             error: response.error 
           },
-        });
+        }).catch(() => {}); // Fire and forget - don't block UI
       }
 
       return response;

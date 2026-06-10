@@ -37,7 +37,7 @@ const CACHE_KEYS = {
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [appUser, setAppUser] = useState<AppUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // Start true to show LoadingScreen during initialization
   const [error, setError] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
@@ -164,10 +164,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const { user_code, pin } = credentials;
       const pinHash = await hashPin(pin);
 
-      // Demo users for testing (bypass database for now)
+      // Demo users for testing (matches actual database users)
       const demoUsers = [
         {
-          id: 'demo-1',
+          id: 'deef14c8-311e-4905-abfd-96cf5965b6f3',
           user_code: 'A001',
           full_name: 'Admin User',
           role: 'admin' as const,
@@ -177,7 +177,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           updated_at: new Date().toISOString()
         },
         {
-          id: 'demo-2',
+          id: '6f9e4d37-3ed1-4265-97b9-924f18d55b08',
           user_code: 'A002',
           full_name: 'Manager User',
           role: 'manager' as const,
@@ -187,7 +187,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           updated_at: new Date().toISOString()
         },
         {
-          id: 'demo-3',
+          id: '92f27abd-3cb3-4802-9c9e-94d62dcfe7ba',
           user_code: 'A003',
           full_name: 'Cashier User',
           role: 'cashier' as const,
@@ -197,7 +197,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           updated_at: new Date().toISOString()
         },
         {
-          id: 'demo-4',
+          id: '91b99b89-c4e0-4217-88fa-50c17f92a330',
           user_code: 'A004',
           full_name: 'Viewer User',
           role: 'viewer' as const,

@@ -36,55 +36,55 @@ class FundTransferService {
     }
   }
 
-  // Create new fund transfer
-  async createFundTransfer(transfer: Omit<FundTransfer, 'id' | 'created_at' | 'updated_at'>): Promise<ApiResponse<FundTransfer>> {
-    try {
-      // First, try to update account balances
-      await this.updateAccountBalances(transfer.from_account, transfer.to_account, transfer.amount);
+   // Create new fund transfer
+   async createFundTransfer(transfer: Omit<FundTransfer, 'id' | 'created_at' | 'updated_at'>): Promise<ApiResponse<FundTransfer>> {
+     try {
+       // First, try to update account balances with proper currency conversion
+       await this.updateAccountBalances(transfer);
 
-      const { data, error } = await supabase
-        .from('fund_transfers')
-        .insert([transfer])
-        .select()
-        .single();
+       const { data, error } = await supabase
+         .from('fund_transfers')
+         .insert([transfer])
+         .select()
+         .single();
 
-      if (error) {
-        console.log('Supabase create transfer error:', error.message);
-        // Return a mock successful response for demo
-        const mockTransfer: FundTransfer = {
-          ...transfer,
-          id: generateUUID(),
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-        return {
-          data: mockTransfer,
-          error: null,
-          success: true,
-        };
-      }
+       if (error) {
+         console.log('Supabase create transfer error:', error.message);
+         // Return a mock successful response for demo
+         const mockTransfer: FundTransfer = {
+           ...transfer,
+           id: generateUUID(),
+           created_at: new Date().toISOString(),
+           updated_at: new Date().toISOString(),
+         };
+         return {
+           data: mockTransfer,
+           error: null,
+           success: true,
+         };
+       }
 
-      return {
-        data,
-        error: null,
-        success: true,
-      };
-    } catch (error) {
-      console.error('Error creating fund transfer:', error);
-      // Return a mock successful response for demo
-      const mockTransfer: FundTransfer = {
-        ...transfer,
-        id: generateUUID(),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      return {
-        data: mockTransfer,
-        error: null,
-        success: true,
-      };
-    }
-  }
+       return {
+         data,
+         error: null,
+         success: true,
+       };
+     } catch (error) {
+       console.error('Error creating fund transfer:', error);
+       // Return a mock successful response for demo
+       const mockTransfer: FundTransfer = {
+         ...transfer,
+         id: generateUUID(),
+         created_at: new Date().toISOString(),
+         updated_at: new Date().toISOString(),
+       };
+       return {
+         data: mockTransfer,
+         error: null,
+         success: true,
+       };
+     }
+   }
 
   // Update fund transfer
   async updateFundTransfer(id: string, updates: Partial<FundTransfer>): Promise<ApiResponse<FundTransfer>> {
@@ -252,28 +252,30 @@ class FundTransferService {
     }
   }
 
-  // Helper method to update account balances
-  private async updateAccountBalances(fromAccount: string, toAccount: string, amount: number): Promise<void> {
-    try {
-      // Get all accounts to find the correct IDs
-      const accountsResponse = await internalAccountService.getInternalAccounts();
-      if (!accountsResponse.data) return;
+   // Helper method to update account balances with proper currency conversion
+   private async updateAccountBalances(transfer: Omit<FundTransfer, 'id' | 'created_at' | 'updated_at'>): Promise<void> {
+     try {
+       // Get all accounts to find the correct IDs
+       const accountsResponse = await internalAccountService.getInternalAccounts();
+       if (!accountsResponse.data) return;
 
-      const fromAccountData = accountsResponse.data.find(acc => acc.account_name === fromAccount);
-      const toAccountData = accountsResponse.data.find(acc => acc.account_name === toAccount);
+       const fromAccountData = accountsResponse.data.find(acc => acc.account_name === transfer.from_account);
+       const toAccountData = accountsResponse.data.find(acc => acc.account_name === transfer.to_account);
 
-      if (fromAccountData) {
-        await internalAccountService.updateAccountBalance(fromAccountData.id, amount, 'subtract');
-      }
+       // Subtract the source amount from the source account
+       if (fromAccountData) {
+         await internalAccountService.updateAccountBalance(fromAccountData.id, transfer.amount, 'subtract');
+       }
 
-      if (toAccountData) {
-        await internalAccountService.updateAccountBalance(toAccountData.id, amount, 'add');
-      }
-    } catch (error) {
-      console.error('Error updating account balances:', error);
-      // Continue with transfer even if balance update fails
-    }
-  }
+       // Add the converted amount to the destination account
+       if (toAccountData) {
+         await internalAccountService.updateAccountBalance(toAccountData.id, transfer.converted_amount, 'add');
+       }
+     } catch (error) {
+       console.error('Error updating account balances:', error);
+       // Continue with transfer even if balance update fails
+     }
+   }
 }
 
 export const fundTransferService = new FundTransferService();

@@ -50,7 +50,7 @@ class NotificationService {
 
       if (error) {
         console.error('Error loading notifications:', error);
-        return this.getMockNotifications();
+        return [];
       }
 
       this.notifications = (data || []).map(this.mapDatabaseNotification);
@@ -58,7 +58,7 @@ class NotificationService {
       return this.notifications;
     } catch (error) {
       console.error('Error loading notifications:', error);
-      return this.getMockNotifications();
+      return [];
     }
   }
 
@@ -68,12 +68,12 @@ class NotificationService {
       id: dbNotification.id,
       type: dbNotification.type as Notification['type'],
       title: dbNotification.title,
-      description: dbNotification.message,
+      description: dbNotification.description || dbNotification.message || '',
       timestamp: dbNotification.created_at,
       isRead: dbNotification.is_read,
       actionType: this.getActionType(dbNotification.type),
       actionScreen: this.getActionScreen(dbNotification.type),
-      actionData: dbNotification.data || null, // Handle missing data column
+      actionData: dbNotification.data || null,
       priority: this.getPriority(dbNotification.type, dbNotification.priority),
       stationId: dbNotification.station_id || null,
     };
@@ -129,75 +129,6 @@ class NotificationService {
       default:
         return 'low';
     }
-  }
-
-  // Get mock notifications for development
-  private getMockNotifications(): Notification[] {
-    const now = new Date();
-    const mockNotifications: Notification[] = [
-      {
-        id: '1',
-        type: 'low_stock',
-        title: 'Low Stock Alert',
-        description: 'Petrol is running low at ISSIRO STATION.',
-        timestamp: new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
-        isRead: false,
-        actionType: 'view_stock',
-        actionScreen: 'StockManagement',
-        priority: 'high',
-        stationId: 'issiro_station',
-      },
-      {
-        id: '2',
-        type: 'payment_due',
-        title: 'Payment Due Soon',
-        description: 'Invoice #1234 is due tomorrow.',
-        timestamp: new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString(), // 1 day ago
-        isRead: false,
-        actionType: 'view_payment',
-        actionScreen: 'Reports',
-        priority: 'high',
-      },
-      {
-        id: '3',
-        type: 'fuel_delivery',
-        title: 'Fuel Delivery Completed',
-        description: '5000L of Diesel delivered to DEPOT ISSIRO.',
-        timestamp: new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 days ago
-        isRead: true,
-        actionType: 'view_delivery',
-        actionScreen: 'SalesEntry',
-        priority: 'low',
-        stationId: 'depot_issiro',
-      },
-      {
-        id: '4',
-        type: 'payment_received',
-        title: 'Payment Received',
-        description: 'Received $500 from Corporate Client X.',
-        timestamp: new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days ago
-        isRead: true,
-        actionType: 'view_payment',
-        actionScreen: 'Reports',
-        priority: 'low',
-      },
-      {
-        id: '5',
-        type: 'low_stock',
-        title: 'Low Stock Alert',
-        description: 'Diesel is running low at RUNGU STATION.',
-        timestamp: new Date(now.getTime() - 4 * 24 * 60 * 60 * 1000).toISOString(), // 4 days ago
-        isRead: true,
-        actionType: 'view_stock',
-        actionScreen: 'StockManagement',
-        priority: 'high',
-        stationId: 'rungu_station',
-      },
-    ];
-
-    this.notifications = mockNotifications;
-    this.notifyListeners();
-    return mockNotifications;
   }
 
   // Get notification counts
@@ -272,7 +203,6 @@ class NotificationService {
         .insert({
           type: notification.type,
           title: notification.title,
-          message: notification.description,
           description: notification.description,
           data: notification.actionData,
           station_id: notification.stationId,
@@ -324,15 +254,11 @@ class NotificationService {
     return this.notifications.filter(n => !n.isRead).length;
   }
 
-  // markAllAsRead method already exists above
-
   async saveConfiguration(config: any): Promise<void> {
-    // Save configuration (implement as needed)
     console.log('Saving notification configuration:', config);
   }
 
   async sendPushNotification(title: string, body: string, data?: any): Promise<void> {
-    // Send push notification (implement as needed)
     console.log('Sending push notification:', { title, body, data });
   }
 
@@ -347,12 +273,10 @@ class NotificationService {
   }
 
   async requestPermissions(): Promise<{ status: string; canAskAgain: boolean }> {
-    // Request notification permissions (implement as needed)
     return { status: 'granted', canAskAgain: false };
   }
 
   async getPushToken(): Promise<string | null> {
-    // Get push token (implement as needed)
     return 'mock-push-token';
   }
 
@@ -361,12 +285,10 @@ class NotificationService {
   }
 
   async setBadgeCount(count: number): Promise<void> {
-    // Set badge count (implement as needed)
     console.log('Setting badge count:', count);
   }
 
   async clearBadge(): Promise<void> {
-    // Clear badge (implement as needed)
     console.log('Clearing badge');
   }
 }

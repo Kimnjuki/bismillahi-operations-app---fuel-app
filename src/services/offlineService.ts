@@ -175,50 +175,93 @@ class OfflineService {
     }
   }
 
-  // Sync offline data
-  async syncOfflineData(): Promise<{ success: number; failed: number }> {
-    if (!this.isOnline || this.syncInProgress) {
-      return { success: 0, failed: 0 };
-    }
+// Sync offline data with batch operations
+   async syncOfflineData(): Promise<{ success: number; failed: number }> {
+     if (!this.isOnline || this.syncInProgress) {
+       return { success: 0, failed: 0 };
+     }
 
-    this.syncInProgress = true;
-    const queue = await this.getOfflineQueue();
-    let successCount = 0;
-    let failedCount = 0;
+     this.syncInProgress = true;
+     const queue = await this.getOfflineQueue();
+     let successCount = 0;
+     let failedCount = 0;
+     const successfulOps: string[] = [];
 
-    try {
-      for (const operation of queue) {
-        try {
-          await this.executeOperation(operation);
-          successCount++;
-        } catch (error) {
-          console.error('Error executing operation:', error);
-          operation.retryCount++;
-          
-          if (operation.retryCount >= operation.maxRetries) {
-            failedCount++;
-          } else {
-            // Keep operation in queue for retry
-            const updatedQueue = queue.filter(op => op.id !== operation.id);
-            updatedQueue.push(operation);
-            await this.saveOfflineQueue(updatedQueue);
-          }
-        }
-      }
+     try {
+       // Group operations by table for batch processing
+       const operationsByTable: Record<string, OfflineOperation[]> = {};
+       queue.forEach(op => {
+         if (!operationsByTable[op.table]) {
+           operationsByTable[op.table] = [];
+         }
+         operationsByTable[op.table].push(op);
+       });
 
-      // Remove successful operations from queue
-      const remainingQueue = queue.filter(op => op.retryCount < op.maxRetries);
-      await this.saveOfflineQueue(remainingQueue);
+       // Process each table's operations in batch
+       for (const [table, ops] of Object.entries(operationsByTable)) {
+         try {
+           // Batch insert for INSERT operations
+           const insertOps = ops.filter(op => op.type === 'INSERT');
+           if (insertOps.length > 0) {
+             const records = insertOps.map(op => op.data);
+             const { error: insertError } = await supabase
+               .from(table)
+               .insert(records);
+            
+             if (insertError) throw insertError;
+             successCount += insertOps.length;
+             successfulOps.push(...insertOps.map(op => op.id));
+           }
 
-      // Update last sync time
-      await AsyncStorage.setItem(STORAGE_KEYS.LAST_SYNC, Date.now().toString());
+           // Batch update for UPDATE operations
+           const updateOps = ops.filter(op => op.type === 'UPDATE');
+           for (const op of updateOps) {
+             const { error: updateError } = await supabase
+               .from(table)
+               .update(op.data)
+               .eq('id', op.data.id);
+            
+             if (updateError) throw updateError;
+             successCount++;
+             successfulOps.push(op.id);
+           }
 
-    } finally {
-      this.syncInProgress = false;
-    }
+           // Batch delete for DELETE operations
+           const deleteOps = ops.filter(op => op.type === 'DELETE');
+           const deleteIds = deleteOps.map(op => op.data.id);
+           if (deleteIds.length > 0) {
+             const { error: deleteError } = await supabase
+               .from(table)
+               .delete()
+               .in('id', deleteIds);
+            
+             if (deleteError) throw deleteError;
+             successCount += deleteOps.length;
+             successfulOps.push(...deleteOps.map(op => op.id));
+           }
+         } catch (error) {
+           console.error(`Error syncing table ${table}:`, error);
+           failedCount += ops.length;
+           // Mark failed operations for retry
+           ops.forEach(op => {
+             op.retryCount++;
+           });
+         }
+       }
 
-    return { success: successCount, failed: failedCount };
-  }
+       // Remove successful operations from queue
+       const remainingQueue = queue.filter(op => !successfulOps.includes(op.id));
+       await this.saveOfflineQueue(remainingQueue);
+
+       // Update last sync time
+       await AsyncStorage.setItem(STORAGE_KEYS.LAST_SYNC, Date.now().toString());
+
+     } finally {
+       this.syncInProgress = false;
+     }
+
+     return { success: successCount, failed: failedCount };
+   }
 
   // Execute a single operation
   private async executeOperation(operation: OfflineOperation): Promise<void> {

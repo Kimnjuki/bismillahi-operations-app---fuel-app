@@ -14,7 +14,6 @@ class TankService {
         .from('tanks')
         .select('*')
         .eq('station_id', stationId)
-        .eq('is_active', true)
         .order('tank_number', { ascending: true });
 
       if (error) throw error;
@@ -40,7 +39,6 @@ class TankService {
       const { data, error } = await supabase
         .from('tanks')
         .select('*')
-        .eq('is_active', true)
         .order('station_id', { ascending: true })
         .order('tank_number', { ascending: true });
 
@@ -144,10 +142,7 @@ class TankService {
     try {
       const { error } = await supabase
         .from('tanks')
-        .update({
-          is_active: false,
-          updated_at: new Date().toISOString(),
-        })
+        .delete()
         .eq('id', id);
 
       if (error) throw error;
@@ -270,7 +265,6 @@ class TankService {
         .from('tanks')
         .select('tank_number')
         .eq('station_id', stationId)
-        .eq('is_active', true)
         .order('tank_number', { ascending: false })
         .limit(1);
 

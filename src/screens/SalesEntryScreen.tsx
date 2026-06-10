@@ -10,6 +10,8 @@ import {
   Dimensions,
   TextInput,
   Image,
+  Modal,
+  FlatList,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -48,42 +50,94 @@ const CUSTOMERS = ['Walk-in Custom', 'Regular Customer', 'Corporate Client'];
 const STATIONS = ['ISSIRO STATION', 'DEPOT ISSIRO', 'RUNGU STATION', 'DUNGU STATION', 'DURBA STATION', 'NIANGARA STATION'];
 const DRUM_STATIONS = ['DEPOT ISSIRO', 'DUNGU STATION'];
 
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
 export default function SalesEntryScreen() {
   const { appUser } = useAuth();
   const navigation = useNavigation();
   
-  // Get user's assigned station
   const userStation = appUser?.station_id;
   const [receipt, setReceipt] = useState<SalesReceipt>({
     station: 'ISSIRO STATION',
     customer: 'Walk-in Custom',
     payment: 'Cash',
     refNo: '',
-    items: [
-      {
-        id: '1',
-        itemType: 'pump',
-        itemName: 'PMS',
-        quantity: 145.67,
-        rate: 3200,
-        total: 466144,
-      },
-      {
-        id: '2',
-        itemType: 'drum',
-        itemName: 'AGO',
-        quantity: 2,
-        rate: 656000,
-        total: 1312000,
-      },
-    ],
-    subtotal: 1778144,
+    items: [],
+    subtotal: 0,
     tax: 0,
-    total: 1778144,
+    total: 0,
   });
   const [loading, setLoading] = useState(false);
   const [editingItem, setEditingItem] = useState<string | null>(null);
   const [receiptImages, setReceiptImages] = useState<string[]>([]);
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [tempDate, setTempDate] = useState({ year: new Date().getFullYear(), month: new Date().getMonth() + 1, day: new Date().getDate() });
+  const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth() + 1);
+  const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
+
+  const getDaysInMonth = (year: number, month: number) => new Date(year, month, 0).getDate();
+  const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month - 1, 1).getDay();
+
+  const openDatePicker = () => {
+    const selected = new Date(`${selectedDate}T00:00:00`);
+    setCalendarMonth(selected.getMonth() + 1);
+    setCalendarYear(selected.getFullYear());
+    setTempDate({
+      year: selected.getFullYear(),
+      month: selected.getMonth() + 1,
+      day: selected.getDate(),
+    });
+    setShowDatePicker(true);
+  };
+
+  const applyTempDate = () => {
+    const month = tempDate.month || calendarMonth;
+    const year = tempDate.year || calendarYear;
+    const day = Math.min(tempDate.day || 1, getDaysInMonth(year, month));
+    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    setSelectedDate(dateStr);
+    setShowDatePicker(false);
+  };
+
+  const changeCalendarMonth = (delta: number) => {
+    let m = calendarMonth + delta;
+    let y = calendarYear;
+    if (m < 1) { m = 12; y -= 1; }
+    if (m > 12) { m = 1; y += 1; }
+    setCalendarMonth(m);
+    setCalendarYear(y);
+  };
+
+  const renderCalendar = () => {
+    const daysInMonth = getDaysInMonth(calendarYear, calendarMonth);
+    const firstDay = getFirstDayOfMonth(calendarYear, calendarMonth);
+    const daysToRender: Array<{ day: number; empty: boolean }> = [];
+    for (let i = 0; i < firstDay; i++) {
+      daysToRender.push({ day: 0, empty: true });
+    }
+    for (let day = 1; day <= daysInMonth; day++) {
+      daysToRender.push({ day, empty: false });
+    }
+    return daysToRender;
+  };
+
+  const refreshDefaultReceipt = () => {
+    setReceiptImages([]);
+    setReceipt({
+      station: 'ISSIRO STATION',
+      customer: 'Walk-in Custom',
+      payment: 'Cash',
+      refNo: '',
+      items: [],
+      subtotal: 0,
+      tax: 0,
+      total: 0,
+    });
+  };
 
   const calculateItemTotal = (quantity: number, rate: number): number => {
     return quantity * rate;
@@ -94,26 +148,20 @@ export default function SalesEntryScreen() {
   };
 
   const getAvailableStations = (): string[] => {
-    // If user is admin, they can access all stations
     if (appUser?.role === 'admin') {
       return STATIONS;
     }
-    
-    // If user has a specific station assigned, only show that station
     if (userStation) {
       const stationName = STATIONS.find(station => 
         station.toLowerCase().replace(/\s+/g, '_') === userStation.toLowerCase()
       );
       return stationName ? [stationName] : STATIONS;
     }
-    
-    // Default fallback
     return STATIONS;
   };
 
   const handleStationChange = (newStation: string) => {
     const newItemType = getItemTypeForStation(newStation);
-    
     setReceipt(prev => ({
       ...prev,
       station: newStation,
@@ -126,7 +174,7 @@ export default function SalesEntryScreen() {
 
   const calculateTotals = (items: SalesItem[]) => {
     const subtotal = items.reduce((sum, item) => sum + item.total, 0);
-    const tax = subtotal * 0; // 0% tax for now
+    const tax = subtotal * 0;
     const total = subtotal + tax;
     return { subtotal, tax, total };
   };
@@ -192,7 +240,6 @@ export default function SalesEntryScreen() {
   const handleSaveDraft = async () => {
     try {
       setLoading(true);
-      // Save as draft logic here
       Alert.alert('Success', 'Receipt saved as draft');
     } catch (error) {
       Alert.alert('Error', 'Failed to save draft');
@@ -205,13 +252,13 @@ export default function SalesEntryScreen() {
     try {
       setLoading(true);
       
-      // Insert into daily_sales table
       for (const item of receipt.items) {
       const { error } = await supabase
           .from('daily_sales')
           .insert({
             sale_type: item.itemType,
-            fuel_type: item.itemName === 'PMS' ? 'Petrol' : 'Diesel',
+            fuel_type: item.itemName,
+            station_name: receipt.station,
             pump_number: item.itemType === 'pump' ? 1 : null,
             volume_liters: item.itemType === 'pump' ? item.quantity : null,
             quantity: item.itemType === 'drum' ? item.quantity : null,
@@ -219,27 +266,25 @@ export default function SalesEntryScreen() {
             price_per_drum: item.itemType === 'drum' ? item.rate : null,
             total_amount: item.total,
             payment_method: receipt.payment.toLowerCase(),
-            sale_date: new Date().toISOString().split('T')[0],
+            sale_date: selectedDate,
             created_by: appUser?.id,
           });
 
-      if (error) {
+        if (error) {
           console.error('Error inserting sale:', error);
         }
       }
 
       Alert.alert('Success', 'Receipt submitted successfully');
-      // Reset form
-      setReceipt({
-        station: 'ISSIRO STATION',
-        customer: 'Walk-in Custom',
-        payment: 'Cash',
+      setReceipt((prev) => ({
+        ...prev,
         refNo: '',
         items: [],
         subtotal: 0,
         tax: 0,
         total: 0,
-      });
+      }));
+      setReceiptImages([]);
     } catch (error) {
       console.error('Error submitting receipt:', error);
       Alert.alert('Error', 'Failed to submit receipt');
@@ -345,7 +390,7 @@ export default function SalesEntryScreen() {
             <Ionicons name="chevron-down" size={16} color="#666" />
           </TouchableOpacity>
         </View>
-      <TouchableOpacity
+       <TouchableOpacity
           style={styles.deleteButton}
           onPress={() => removeItem(item.id)}
       >
@@ -356,17 +401,29 @@ export default function SalesEntryScreen() {
       <View style={styles.itemInputs}>
         {item.itemType === 'pump' ? (
           <>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>QTY (LITERS)</Text>
-              <TextInput
-                style={styles.inputContainer}
-                value={item.quantity.toString()}
-                onChangeText={(text) => updateItem(item.id, 'quantity', parseFloat(text) || 0)}
-                keyboardType="numeric"
-                placeholder="0.00"
-              />
-            </View>
-        <View style={styles.inputGroup}>
+           <View style={styles.inputGroup}>
+               <Text style={styles.inputLabel}>QTY (LITERS)</Text>
+               <TextInput
+                 style={styles.inputContainer}
+                 value={item.quantity.toString()}
+                 onChangeText={(text) => {
+                   const value = parseFloat(text) || 0;
+                   // Validate quantity is positive and reasonable
+                   if (value < 0) {
+                     Alert.alert('Error', 'Quantity cannot be negative');
+                     return;
+                   }
+                   if (value > 50000) {
+                     Alert.alert('Error', 'Quantity exceeds maximum limit of 50,000 liters');
+                     return;
+                   }
+                   updateItem(item.id, 'quantity', value);
+                 }}
+                 keyboardType="numeric"
+                 placeholder="0.00"
+               />
+             </View>
+          <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>RATE (CDF)</Text>
               <TextInput
                 style={styles.inputContainer}
@@ -425,8 +482,13 @@ export default function SalesEntryScreen() {
           <TouchableOpacity onPress={() => navigation.goBack()}>
             <Ionicons name="arrow-back" size={24} color="#ffffff" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Create Sales Receipt</Text>
-          <Text style={styles.headerDate}>Date: {new Date().toLocaleDateString('en-GB')}</Text>
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerTitle}>Create Sales Receipt</Text>
+            <TouchableOpacity style={styles.dateButton} onPress={openDatePicker}>
+              <Text style={styles.headerDate}>📅 {selectedDate}</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.headerSpacer} />
         </LinearGradient>
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -495,7 +557,7 @@ export default function SalesEntryScreen() {
                 <Ionicons name="add" size={20} color="#312C51" />
                 <Text style={styles.captureButtonText}>Add Image</Text>
               </TouchableOpacity>
-        </View>
+          </View>
 
             {receiptImages.length > 0 && (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.imagesScroll}>
@@ -581,6 +643,63 @@ export default function SalesEntryScreen() {
             <Text style={styles.printText}>Print</Text>
               </TouchableOpacity>
             </View>
+
+        {/* Date Picker Modal */}
+        <Modal visible={showDatePicker} transparent animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={styles.datePickerModal}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Select Date</Text>
+                <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                  <Ionicons name="close" size={24} color="#333" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.calendarHeader}>
+                <TouchableOpacity onPress={() => changeCalendarMonth(-1)}>
+                  <Ionicons name="chevron-back" size={24} color="#312C51" />
+                </TouchableOpacity>
+                <Text style={styles.calendarMonthYear}>
+                  {MONTHS[calendarMonth - 1]} {calendarYear}
+                </Text>
+                <TouchableOpacity onPress={() => changeCalendarMonth(1)}>
+                  <Ionicons name="chevron-forward" size={24} color="#312C51" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.calendarWeekDays}>
+                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
+                  <View key={index} style={styles.weekDayCell}>
+                    <Text style={styles.weekDayText}>{day}</Text>
+                  </View>
+                ))}
+              </View>
+              <FlatList
+                data={renderCalendar()}
+                numColumns={7}
+                keyExtractor={(item, index) => index.toString()}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={[
+                      styles.calendarDayCell,
+                      !item.empty && tempDate.day === item.day && tempDate.month === calendarMonth && tempDate.year === calendarYear && styles.selectedDayCell,
+                    ]}
+                    onPress={() => !item.empty && setTempDate({ ...tempDate, day: item.day })}
+                  >
+                    <Text style={[
+                      styles.calendarDayText,
+                      !item.empty && tempDate.day === item.day && tempDate.month === calendarMonth && tempDate.year === calendarYear && styles.selectedDayText,
+                    ]}>
+                      {item.day || ''}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                scrollEnabled={false}
+              />
+              <TouchableOpacity style={styles.applyDateButton} onPress={applyTempDate}>
+                <Text style={styles.applyDateText}>Apply Date</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </View>
   );
@@ -930,5 +1049,95 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#999',
     marginTop: 4,
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  headerSpacer: {
+    width: 24,
+  },
+  dateButton: {
+    marginTop: 4,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  datePickerModal: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 20,
+    width: '90%',
+    maxWidth: 360,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  calendarMonthYear: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#312C51',
+  },
+  calendarWeekDays: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 8,
+  },
+  weekDayCell: {
+    width: 40,
+    alignItems: 'center',
+  },
+  weekDayText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666',
+  },
+  calendarDayCell: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  calendarDayText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  selectedDayCell: {
+    backgroundColor: '#F0C38E',
+    borderRadius: 20,
+  },
+  selectedDayText: {
+    color: '#312C51',
+    fontWeight: 'bold',
+  },
+  applyDateButton: {
+    backgroundColor: '#312C51',
+    borderRadius: 8,
+    padding: 14,
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  applyDateText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffffff',
   },
 });

@@ -1,3 +1,5 @@
+import React from 'react';
+
 // Base types
 export interface BaseEntity {
   id: string;
@@ -233,6 +235,7 @@ export type RootStackParamList = {
   Welcome: undefined;
   Dashboard: undefined;
   SalesEntry: undefined;
+  SalesRecords: undefined;
   StockManagement: undefined;
   Expense: undefined;
   FundTransfer: undefined;
@@ -485,7 +488,7 @@ export const DRUM_TYPES: DrumType[] = ['200L Drum', '100L Drum', '50L Drum', '25
 
 export const PAYMENT_METHODS: PaymentMethod[] = ['cash', 'card', 'credit'];
 
-export const CURRENCIES: Currency[] = ['NGN', 'USD', 'EUR', 'GBP'];
+export const CURRENCIES: Currency[] = ['NGN', 'USD', 'EUR', 'GBP', 'CDF'];
 
 export const NOTIFICATION_TYPES: NotificationType[] = ['info', 'warning', 'error', 'success'];
 

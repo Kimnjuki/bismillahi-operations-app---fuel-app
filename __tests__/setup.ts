@@ -1,43 +1,6 @@
 import 'react-native-gesture-handler/jestSetup';
 import '@testing-library/jest-native/extend-expect';
 
-// Mock react-native-reanimated
-jest.mock('react-native-reanimated', () => {
-  const mockReanimated = {
-    createAnimatedComponent: (component: any) => component,
-    default: {
-      createAnimatedComponent: (component: any) => component,
-      call: () => {},
-      View: 'View',
-      Text: 'Text',
-      Image: 'Image',
-      ScrollView: 'ScrollView',
-      FlatList: 'FlatList',
-    },
-    call: () => {},
-    View: 'View',
-    Text: 'Text',
-    Image: 'Image',
-    ScrollView: 'ScrollView',
-    FlatList: 'FlatList',
-    useSharedValue: (value: any) => ({ value }),
-    useAnimatedStyle: () => ({}),
-    useDerivedValue: (fn: () => any) => ({ value: fn() }),
-    withTiming: (value: number) => value,
-    withSpring: (value: number) => value,
-    withRepeat: (animation: any) => animation,
-    Easing: { bezier: () => () => 0.5, in: () => 0.5, out: () => 0.5, inOut: () => 0.5 },
-    FadeIn: {},
-    FadeOut: {},
-    SlideInRight: {},
-    SlideOutRight: {},
-    Layout: {},
-    seq: (...animations: any[]) => animations[animations.length - 1],
-    cancelAnimation: () => {},
-  };
-  return mockReanimated;
-});
-
 // Mock expo modules
 jest.mock('expo-constants', () => ({
   expoConfig: {
@@ -185,10 +148,6 @@ global.mockRoute = {
   name: 'Test',
 };
 
-// Silence the warning: Animated: `useNativeDriver` is not supported
-jest.mock('react-native/Libraries/Animated/NativeAnimatedHelper');
-
-// Mock console methods to reduce noise in tests
 global.console = {
   ...console,
   log: jest.fn(),

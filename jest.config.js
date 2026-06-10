@@ -7,7 +7,7 @@ module.exports = {
     '<rootDir>/ios/',
   ],
   transformIgnorePatterns: [
-    'node_modules/(?!(react-native|@react-native|@react-navigation|expo|@expo|expo-modules-core|@supabase|react-native-reanimated|react-native-gesture-handler|react-native-screens|react-native-safe-area-context|@react-native-async-storage|@react-native-community|react-native-vector-icons)/)',
+    'node_modules/(?!(react-native|@react-native|@react-navigation|expo|@expo|expo-modules-core|@supabase|react-native-gesture-handler|react-native-screens|react-native-safe-area-context|@react-native-async-storage|@react-native-community|react-native-vector-icons|expo-crypto|expo-constants|expo-device)/)',
   ],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
   collectCoverageFrom: [
@@ -24,10 +24,5 @@ module.exports = {
   ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
-  },
-  globals: {
-    'ts-jest': {
-      tsconfig: 'tsconfig.json',
-    },
   },
 };

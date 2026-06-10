@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { generateUUID } from '../utils/uuid';
 import { FundTransfer, Currency } from '../types';
+import { supabase } from '../config/supabase';
 import { fundTransferService } from '../services/fundTransferService';
 import { internalAccountService, InternalAccount, Station } from '../services/internalAccountService';
 
@@ -28,17 +29,56 @@ interface TransferFormData {
   amount: string;
   exchangeRate: string;
   date: string;
+  formattedDate: string;
   class: string;
   memo: string;
   fromCurrency: Currency;
   toCurrency: Currency;
 }
 
+interface ExchangeRateRecord {
+  id: string;
+  from_currency: Currency;
+  to_currency: Currency;
+  rate: number;
+  effective_date: string;
+}
+
+// Generate date list (last 30 days)
+const generateDateOptions = () => {
+  const options: string[] = [];
+  for (let i = 0; i < 30; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    options.push(d.toISOString().split('T')[0]);
+  }
+  return options;
+};
+
+const formatDisplayDate = (dateStr: string) => {
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('en-US', {
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+};
+
+const formatCurrencyDisplay = (amount: number, currency: Currency): string => {
+  if (currency === 'USD') {
+    return `$${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+  return `CDF ${amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+};
+
 export default function NewTransferScreen({ navigation }: any) {
   const { appUser } = useAuth();
   const [accounts, setAccounts] = useState<InternalAccount[]>([]);
   const [stations, setStations] = useState<Station[]>([]);
   const [loading, setLoading] = useState(false);
+  const [exchangeRates, setExchangeRates] = useState<ExchangeRateRecord[]>([]);
+  const [dateOptions] = useState<string[]>(generateDateOptions());
   
   // Modal states
   const [showFromAccountModal, setShowFromAccountModal] = useState(false);
@@ -47,16 +87,18 @@ export default function NewTransferScreen({ navigation }: any) {
   const [showDateModal, setShowDateModal] = useState(false);
 
   // Form data
+  const todayStr = new Date().toISOString().split('T')[0];
   const [formData, setFormData] = useState<TransferFormData>({
     fromAccount: '',
     toAccount: '',
-    amount: '1000',
-    exchangeRate: '2800.50',
-    date: new Date().toLocaleDateString('en-US'),
+    amount: '',
+    exchangeRate: '',
+    date: todayStr,
+    formattedDate: formatDisplayDate(todayStr),
     class: '',
     memo: '',
-    fromCurrency: 'CDF',
-    toCurrency: 'USD',
+    fromCurrency: 'USD',
+    toCurrency: 'CDF',
   });
 
   // Transfer classes
@@ -74,7 +116,16 @@ export default function NewTransferScreen({ navigation }: any) {
   useEffect(() => {
     fetchAccounts();
     fetchStations();
+    fetchExchangeRates();
   }, []);
+
+  // When date changes, fetch exchange rate for that date
+  useEffect(() => {
+    const rate = getExchangeRateForDate(formData.date);
+    if (rate) {
+      setFormData(prev => ({ ...prev, exchangeRate: rate.toString() }));
+    }
+  }, [formData.date]);
 
   const fetchAccounts = async () => {
     try {
@@ -98,14 +149,81 @@ export default function NewTransferScreen({ navigation }: any) {
     }
   };
 
+  const fetchExchangeRates = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('exchange_rates')
+        .select('*')
+        .order('effective_date', { ascending: false });
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        setExchangeRates(data as ExchangeRateRecord[]);
+        
+        // Set today's rate
+        const todayRate = data.find(r => 
+          r.effective_date === todayStr && 
+          ((r.from_currency === 'USD' && r.to_currency === 'CDF') ||
+           (r.from_currency === 'CDF' && r.to_currency === 'USD'))
+        );
+        if (todayRate) {
+          const rate = todayRate.from_currency === 'USD' 
+            ? todayRate.rate.toString() 
+            : (1 / todayRate.rate).toString();
+          setFormData(prev => ({ ...prev, exchangeRate: rate }));
+        } else if (data.length > 0) {
+          // Use most recent rate
+          const latestUsdRate = data.find(r => r.from_currency === 'USD' && r.to_currency === 'CDF');
+          if (latestUsdRate) {
+            setFormData(prev => ({ ...prev, exchangeRate: latestUsdRate.rate.toString() }));
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching exchange rates:', error);
+      // Fallback to a default rate
+      setFormData(prev => ({ ...prev, exchangeRate: '2800.50' }));
+    }
+  };
+
+  const getExchangeRateForDate = (dateStr: string): number | null => {
+    // First try to find an exact rate for that date
+    const dateRates = exchangeRates.filter(r => r.effective_date === dateStr);
+    
+    // Find USD -> CDF rate
+    const usdToCdf = dateRates.find(r => r.from_currency === 'USD' && r.to_currency === 'CDF');
+    if (usdToCdf) return usdToCdf.rate;
+    
+    // Find CDF -> USD rate
+    const cdfToUsd = dateRates.find(r => r.from_currency === 'CDF' && r.to_currency === 'USD');
+    if (cdfToUsd) return 1 / cdfToUsd.rate;
+
+    // Fallback: find the closest rate before this date
+    const sortedRates = [...exchangeRates]
+      .filter(r => r.from_currency === 'USD' && r.to_currency === 'CDF')
+      .sort((a, b) => new Date(b.effective_date).getTime() - new Date(a.effective_date).getTime());
+    
+    for (const rate of sortedRates) {
+      if (rate.effective_date <= dateStr) {
+        return rate.rate;
+      }
+    }
+
+    return null;
+  };
+
   const calculateConvertedAmount = () => {
     const amount = parseFloat(formData.amount) || 0;
     const rate = parseFloat(formData.exchangeRate) || 1;
     
-    if (formData.fromCurrency === 'CDF' && formData.toCurrency === 'USD') {
-      return (amount / rate).toFixed(2);
-    } else if (formData.fromCurrency === 'USD' && formData.toCurrency === 'CDF') {
+    // If from USD to CDF: multiply
+    if (formData.fromCurrency === 'USD' && formData.toCurrency === 'CDF') {
       return (amount * rate).toFixed(2);
+    } 
+    // If from CDF to USD: divide
+    else if (formData.fromCurrency === 'CDF' && formData.toCurrency === 'USD') {
+      return (amount / rate).toFixed(2);
     }
     return amount.toFixed(2);
   };
@@ -137,7 +255,13 @@ export default function NewTransferScreen({ navigation }: any) {
       return;
     }
 
-    if (parseFloat(formData.amount) > fromAccount.balance) {
+    const amountNum = parseFloat(formData.amount);
+    if (isNaN(amountNum) || amountNum <= 0) {
+      Alert.alert('Error', 'Please enter a valid amount');
+      return;
+    }
+
+    if (amountNum > fromAccount.balance) {
       Alert.alert('Error', 'Insufficient balance in the selected account');
       return;
     }
@@ -148,7 +272,7 @@ export default function NewTransferScreen({ navigation }: any) {
       const transferData: Omit<FundTransfer, 'id' | 'created_at' | 'updated_at'> = {
         from_account: formData.fromAccount,
         to_account: formData.toAccount,
-        amount: parseFloat(formData.amount),
+        amount: amountNum,
         currency: formData.fromCurrency,
         exchange_rate: parseFloat(formData.exchangeRate),
         converted_amount: parseFloat(calculateConvertedAmount()),
@@ -161,9 +285,10 @@ export default function NewTransferScreen({ navigation }: any) {
       const response = await fundTransferService.createFundTransfer(transferData);
 
       if (response.success) {
+        const converted = calculateConvertedAmount();
         Alert.alert(
           'Success',
-          `Transfer of ${formatCurrency(parseFloat(formData.amount), formData.fromCurrency)} to ${formData.toAccount} completed successfully`,
+          `Transfer of ${formatCurrencyDisplay(amountNum, formData.fromCurrency)} → ${formatCurrencyDisplay(parseFloat(converted), formData.toCurrency)}\nExchange Rate: ${formData.exchangeRate}\nDate: ${formData.formattedDate}`,
           [
             {
               text: 'OK',
@@ -186,27 +311,19 @@ export default function NewTransferScreen({ navigation }: any) {
   };
 
   const resetForm = () => {
+    const todayStr = new Date().toISOString().split('T')[0];
     setFormData({
       fromAccount: '',
       toAccount: '',
-      amount: '1000',
+      amount: '',
       exchangeRate: '2800.50',
-      date: new Date().toLocaleDateString('en-US'),
+      date: todayStr,
+      formattedDate: formatDisplayDate(todayStr),
       class: '',
       memo: '',
-      fromCurrency: 'CDF',
-      toCurrency: 'USD',
+      fromCurrency: 'USD',
+      toCurrency: 'CDF',
     });
-  };
-
-  const formatCurrency = (amount: number, currency: Currency): string => {
-    const symbol = currency === 'USD' ? '$' : 'CDF';
-    return `${symbol}${amount.toLocaleString()}`;
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US');
   };
 
   const renderAccountItem = (account: InternalAccount, isFrom: boolean) => (
@@ -225,7 +342,7 @@ export default function NewTransferScreen({ navigation }: any) {
       <View style={styles.accountInfo}>
         <Text style={styles.accountName}>{account.account_name}</Text>
         <Text style={styles.accountDetails}>
-          {account.station_name} • {formatCurrency(account.balance, account.currency)}
+          {account.station_name} • {formatCurrencyDisplay(account.balance, account.currency)}
         </Text>
       </View>
       <Text style={styles.accountType}>{account.account_type}</Text>
@@ -244,6 +361,45 @@ export default function NewTransferScreen({ navigation }: any) {
     </TouchableOpacity>
   );
 
+  const renderDateItem = (dateStr: string) => (
+    <TouchableOpacity
+      key={dateStr}
+      style={[styles.dateItem, formData.date === dateStr && styles.dateItemSelected]}
+      onPress={() => {
+        const rate = getExchangeRateForDate(dateStr);
+        setFormData({
+          ...formData,
+          date: dateStr,
+          formattedDate: formatDisplayDate(dateStr),
+          exchangeRate: rate ? rate.toString() : formData.exchangeRate,
+        });
+        setShowDateModal(false);
+      }}
+    >
+      <View style={styles.dateItemContent}>
+        <Text style={[styles.dateItemText, formData.date === dateStr && styles.dateItemTextSelected]}>
+          {formatDisplayDate(dateStr)}
+        </Text>
+        {formData.date === dateStr && (
+          <Ionicons name="checkmark-circle" size={20} color="#F0C38E" />
+        )}
+      </View>
+      {(() => {
+        const rate = getExchangeRateForDate(dateStr);
+        return rate ? (
+          <Text style={styles.dateRateText}>
+            1 USD = {rate.toFixed(2)} CDF
+          </Text>
+        ) : (
+          <Text style={styles.dateRateText}>No rate set</Text>
+        );
+      })()}
+    </TouchableOpacity>
+  );
+
+  const convertedAmount = calculateConvertedAmount();
+  const amountNum = parseFloat(formData.amount) || 0;
+
   return (
     <LinearGradient colors={['#1a1a2e', '#16213e', '#0f3460']} style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
@@ -257,74 +413,135 @@ export default function NewTransferScreen({ navigation }: any) {
         </View>
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          {/* Exchange Rate Banner */}
+          <View style={styles.rateBanner}>
+            <Ionicons name="information-circle" size={18} color="#F0C38E" />
+            <Text style={styles.rateBannerText}>
+              Exchange rate: 1 USD = {parseFloat(formData.exchangeRate || '0').toFixed(2)} CDF
+            </Text>
+          </View>
+
           {/* From Account */}
           <View style={styles.section}>
-            <Text style={styles.label}>From Account</Text>
+            <Text style={styles.label}>From Account *</Text>
             <TouchableOpacity
-              style={styles.inputField}
+              style={[styles.inputField, formData.fromAccount ? styles.inputFieldSelected : null]}
               onPress={() => setShowFromAccountModal(true)}
             >
-              <Text style={styles.inputText}>
-                {formData.fromAccount || 'Select From Account'}
-              </Text>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.inputText, !formData.fromAccount && styles.inputPlaceholder]}>
+                  {formData.fromAccount || 'Select account to transfer FROM'}
+                </Text>
+                {formData.fromAccount && (
+                  <Text style={styles.fieldHint}>
+                    Balance: {getSelectedFromAccount() ? formatCurrencyDisplay(getSelectedFromAccount()!.balance, getSelectedFromAccount()!.currency) : 'N/A'}
+                  </Text>
+                )}
+              </View>
               <Ionicons name="chevron-down" size={20} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
 
           {/* To Account */}
           <View style={styles.section}>
-            <Text style={styles.label}>To Account</Text>
+            <Text style={styles.label}>To Account *</Text>
             <TouchableOpacity
-              style={styles.inputField}
+              style={[styles.inputField, formData.toAccount ? styles.inputFieldSelected : null]}
               onPress={() => setShowToAccountModal(true)}
             >
-              <Text style={styles.inputText}>
-                {formData.toAccount || 'Select To Account'}
-              </Text>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.inputText, !formData.toAccount && styles.inputPlaceholder]}>
+                  {formData.toAccount || 'Select account to transfer TO'}
+                </Text>
+                {formData.toAccount && (
+                  <Text style={styles.fieldHint}>
+                    Balance: {getSelectedToAccount() ? formatCurrencyDisplay(getSelectedToAccount()!.balance, getSelectedToAccount()!.currency) : 'N/A'}
+                  </Text>
+                )}
+              </View>
               <Ionicons name="chevron-down" size={20} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
 
-          {/* Amount */}
+          {/* Amount (in USD/CDF) */}
           <View style={styles.section}>
-            <Text style={styles.label}>Amount</Text>
-            <View style={styles.inputField}>
-              <TextInput
-                style={styles.textInput}
-                value={formData.amount}
-                onChangeText={(text) => setFormData({ ...formData, amount: text })}
-                placeholder="0"
-                placeholderTextColor="#666"
-                keyboardType="numeric"
-              />
-            </View>
+            <Text style={styles.label}>Amount ({formData.fromCurrency}) *</Text>
+            <TextInput
+              style={[styles.inputField, styles.textInputStyle]}
+              value={formData.amount}
+              onChangeText={(text) => setFormData({ ...formData, amount: text })}
+              placeholder={`Enter amount in ${formData.fromCurrency}`}
+              placeholderTextColor="#666"
+              keyboardType="numeric"
+            />
           </View>
 
-          {/* Exchange Rate */}
-          <View style={styles.section}>
-            <Text style={[styles.label, styles.orangeLabel]}>Exchange Rate</Text>
-            <View style={styles.inputField}>
-              <TextInput
-                style={styles.textInput}
-                value={formData.exchangeRate}
-                onChangeText={(text) => setFormData({ ...formData, exchangeRate: text })}
-                placeholder="0.00"
-                placeholderTextColor="#666"
-                keyboardType="numeric"
-              />
+          {/* Converted Amount Display */}
+          {amountNum > 0 && (
+            <View style={styles.convertedDisplay}>
+              <View style={styles.convertedRow}>
+                <Text style={styles.convertedLabel}>Amount to transfer:</Text>
+                <Text style={styles.convertedValue}>
+                  {formatCurrencyDisplay(amountNum, formData.fromCurrency)}
+                </Text>
+              </View>
+              <View style={styles.convertedDivider} />
+              <View style={styles.convertedRow}>
+                <Text style={styles.convertedLabel}>Equivalent ({formData.toCurrency}):</Text>
+                <Text style={styles.convertedValuePrimary}>
+                  {formatCurrencyDisplay(parseFloat(convertedAmount), formData.toCurrency)}
+                </Text>
+              </View>
+              <View style={styles.convertedDivider} />
+              <View style={styles.convertedRow}>
+                <Text style={styles.convertedLabel}>Exchange Rate:</Text>
+                <Text style={styles.convertedRate}>
+                  1 {formData.fromCurrency} = {parseFloat(formData.exchangeRate || '0').toFixed(2)} {formData.toCurrency}
+                </Text>
+              </View>
             </View>
-          </View>
+          )}
 
           {/* Date */}
           <View style={styles.section}>
-            <Text style={styles.label}>Date</Text>
+            <Text style={styles.label}>Transfer Date *</Text>
             <TouchableOpacity
               style={styles.inputField}
               onPress={() => setShowDateModal(true)}
             >
-              <Text style={styles.inputText}>{formData.date}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.inputText}>{formData.formattedDate}</Text>
+                {formData.exchangeRate && (
+                  <Text style={styles.fieldHint}>
+                    Rate: 1 USD = {parseFloat(formData.exchangeRate).toFixed(2)} CDF
+                  </Text>
+                )}
+              </View>
               <Ionicons name="calendar-outline" size={20} color="#FFFFFF" />
             </TouchableOpacity>
+          </View>
+
+          {/* Currency Switcher */}
+          <View style={styles.section}>
+            <Text style={styles.label}>Currency Pair</Text>
+            <View style={styles.currencyPairRow}>
+              <TouchableOpacity
+                style={[styles.currencyButton, formData.fromCurrency === 'USD' && styles.currencyButtonActive]}
+                onPress={() => {
+                  const newFrom: Currency = 'USD';
+                  const newTo: Currency = 'CDF';
+                  setFormData({ ...formData, fromCurrency: newFrom, toCurrency: newTo });
+                }}
+              >
+                <Text style={[styles.currencyButtonText, formData.fromCurrency === 'USD' && styles.currencyButtonTextActive]}>USD</Text>
+              </TouchableOpacity>
+              <Ionicons name="arrow-forward" size={20} color="#F0C38E" style={{ marginHorizontal: 10 }} />
+              <TouchableOpacity
+                style={[styles.currencyButton, formData.toCurrency === 'CDF' && styles.currencyButtonActive]}
+              >
+                <Text style={[styles.currencyButtonText, formData.toCurrency === 'CDF' && styles.currencyButtonTextActive]}>CDF</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Class (Optional) */}
@@ -334,8 +551,8 @@ export default function NewTransferScreen({ navigation }: any) {
               style={styles.inputField}
               onPress={() => setShowClassModal(true)}
             >
-              <Text style={styles.inputText}>
-                {formData.class || 'Select Class'}
+              <Text style={[styles.inputText, !formData.class && styles.inputPlaceholder]}>
+                {formData.class || 'Select transfer class'}
               </Text>
               <Ionicons name="chevron-down" size={20} color="#FFFFFF" />
             </TouchableOpacity>
@@ -349,7 +566,7 @@ export default function NewTransferScreen({ navigation }: any) {
                 style={[styles.textInput, styles.memoInput]}
                 value={formData.memo}
                 onChangeText={(text) => setFormData({ ...formData, memo: text })}
-                placeholder="Add a note"
+                placeholder="Add a note or description"
                 placeholderTextColor="#999"
                 multiline
                 numberOfLines={3}
@@ -357,21 +574,8 @@ export default function NewTransferScreen({ navigation }: any) {
             </View>
           </View>
 
-          {/* Transaction Summary */}
-          <View style={styles.summaryContainer}>
-            <Text style={styles.summaryText}>
-              You are transferring{' '}
-              <Text style={styles.boldText}>
-                {formatCurrency(parseFloat(formData.amount) || 0, formData.fromCurrency)}
-              </Text>
-              {' → '}
-              <Text style={styles.boldText}>
-                {formatCurrency(parseFloat(calculateConvertedAmount()), formData.toCurrency)}
-              </Text>
-              {' at rate '}
-              <Text style={styles.boldText}>{formData.exchangeRate}</Text>
-            </Text>
-          </View>
+          {/* Spacer for buttons */}
+          <View style={{ height: 20 }} />
         </ScrollView>
 
         {/* Action Buttons */}
@@ -442,6 +646,33 @@ export default function NewTransferScreen({ navigation }: any) {
           </View>
         </Modal>
 
+        {/* Date Selection Modal */}
+        <Modal
+          visible={showDateModal}
+          transparent={true}
+          animationType="slide"
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Select Transfer Date</Text>
+                <TouchableOpacity onPress={() => setShowDateModal(false)}>
+                  <Ionicons name="close" size={24} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.dateModalHint}>
+                The exchange rate for the selected date will be used automatically
+              </Text>
+              <FlatList
+                data={dateOptions}
+                keyExtractor={(item) => item}
+                renderItem={({ item }) => renderDateItem(item)}
+                style={styles.modalList}
+              />
+            </View>
+          </View>
+        </Modal>
+
         {/* Class Modal */}
         <Modal
           visible={showClassModal}
@@ -500,29 +731,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   section: {
-    marginBottom: 20,
+    marginBottom: 18,
   },
   label: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     color: '#FFFFFF',
     marginBottom: 8,
-  },
-  orangeLabel: {
-    color: '#FF6B35',
   },
   inputField: {
     backgroundColor: '#2D2D54',
     borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingVertical: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
-  memoField: {
-    minHeight: 80,
-    alignItems: 'flex-start',
+  inputFieldSelected: {
+    borderColor: '#F0C38E',
+    borderWidth: 1,
+  },
+  textInputStyle: {
+    // Override for TextInput
   },
   textInput: {
     flex: 1,
@@ -530,13 +763,103 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     padding: 0,
   },
+  memoField: {
+    minHeight: 80,
+    alignItems: 'flex-start',
+  },
   memoInput: {
     textAlignVertical: 'top',
     minHeight: 60,
   },
   inputText: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#FFFFFF',
+  },
+  inputPlaceholder: {
+    color: '#666',
+  },
+  fieldHint: {
+    fontSize: 12,
+    color: '#F0C38E',
+    marginTop: 4,
+  },
+  convertedDisplay: {
+    backgroundColor: '#1E3A5F',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: '#F0C38E',
+  },
+  convertedRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  convertedDivider: {
+    height: 1,
+    backgroundColor: 'rgba(240, 195, 142, 0.3)',
+    marginVertical: 2,
+  },
+  convertedLabel: {
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+  convertedValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  convertedValuePrimary: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#F0C38E',
+  },
+  convertedRate: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#4FC3F7',
+  },
+  rateBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(240, 195, 142, 0.15)',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 20,
+  },
+  rateBannerText: {
+    fontSize: 13,
+    color: '#F0C38E',
+    marginLeft: 8,
+    flex: 1,
+  },
+  currencyPairRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#2D2D54',
+    borderRadius: 12,
+    padding: 12,
+  },
+  currencyButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+  },
+  currencyButtonActive: {
+    backgroundColor: '#F0C38E',
+  },
+  currencyButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  currencyButtonTextActive: {
+    color: '#1a1a2e',
   },
   summaryContainer: {
     backgroundColor: '#2D2D54',
@@ -652,5 +975,40 @@ const styles = StyleSheet.create({
   classText: {
     fontSize: 16,
     color: '#FFFFFF',
+  },
+  dateItem: {
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2D2D54',
+  },
+  dateItemSelected: {
+    backgroundColor: 'rgba(240, 195, 142, 0.1)',
+  },
+  dateItemContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  dateItemText: {
+    fontSize: 15,
+    color: '#FFFFFF',
+  },
+  dateItemTextSelected: {
+    fontWeight: 'bold',
+    color: '#F0C38E',
+  },
+  dateRateText: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 4,
+  },
+  dateModalHint: {
+    fontSize: 13,
+    color: '#F0C38E',
+    textAlign: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2D2D54',
   },
 });

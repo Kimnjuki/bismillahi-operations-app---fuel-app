@@ -1,0 +1,12 @@
+{
+  "$schema": "https://app.kilo.ai/config.json",
+  "model": "nvidia/llama-3.1-nemotron-70b-instruct",
+  "provider": {
+    "nvidia": {
+      "options": {
+        "apiKey": "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",
+        "baseURL": "https://integrate.api.nvidia.com/v1"
+      }
+    }
+  }
+}

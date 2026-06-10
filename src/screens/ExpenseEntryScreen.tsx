@@ -10,6 +10,8 @@ import {
   Dimensions,
   TextInput,
   Image,
+  Modal,
+  FlatList,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,6 +22,8 @@ import { supabase } from '../config/supabase';
 import { formatCurrency } from '../constants/currency';
 import { EXPENSE_CATEGORIES } from '../constants/expenseCategories';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 const { width } = Dimensions.get('window');
 
@@ -39,13 +43,16 @@ interface ExpenseForm {
   totalUSD: number;
 }
 
-// Categories are now imported from constants/expenseCategories.ts
-
 const EXCHANGE_RATE = 2850.50; // 1 USD = 2850.50 CDF
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
 
 export default function ExpenseEntryScreen() {
   const { appUser } = useAuth();
   const navigation = useNavigation();
+
   const [expenseForm, setExpenseForm] = useState<ExpenseForm>({
     items: [
       {
@@ -68,7 +75,76 @@ export default function ExpenseEntryScreen() {
     totalCDF: 0,
     totalUSD: 0,
   });
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [tempDate, setTempDate] = useState({ year: new Date().getFullYear(), month: new Date().getMonth() + 1, day: new Date().getDate() });
+  const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth() + 1);
+  const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
   const [loading, setLoading] = useState(false);
+
+  const getDaysInMonth = (year: number, month: number) => new Date(year, month, 0).getDate();
+  const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month - 1, 1).getDay();
+
+  const openDatePicker = () => {
+    const selected = new Date(`${selectedDate}T00:00:00`);
+    setCalendarMonth(selected.getMonth() + 1);
+    setCalendarYear(selected.getFullYear());
+    setTempDate({
+      year: selected.getFullYear(),
+      month: selected.getMonth() + 1,
+      day: selected.getDate(),
+    });
+    setShowDatePicker(true);
+  };
+
+  const applyTempDate = () => {
+    const month = tempDate.month || calendarMonth;
+    const year = tempDate.year || calendarYear;
+    const day = Math.min(tempDate.day || 1, getDaysInMonth(year, month));
+    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    setSelectedDate(dateStr);
+    setShowDatePicker(false);
+  };
+
+  const changeCalendarMonth = (delta: number) => {
+    let m = calendarMonth + delta;
+    let y = calendarYear;
+    if (m < 1) { m = 12; y -= 1; }
+    if (m > 12) { m = 1; y += 1; }
+    setCalendarMonth(m);
+    setCalendarYear(y);
+  };
+
+  const renderCalendar = () => {
+    const daysInMonth = getDaysInMonth(calendarYear, calendarMonth);
+    const firstDay = getFirstDayOfMonth(calendarYear, calendarMonth);
+    const daysToRender: Array<{ day: number; empty: boolean }> = [];
+    for (let i = 0; i < firstDay; i++) {
+      daysToRender.push({ day: 0, empty: true });
+    }
+    for (let day = 1; day <= daysInMonth; day++) {
+      daysToRender.push({ day, empty: false });
+    }
+    return daysToRender;
+  };
+
+  const refreshExpenseForm = () => {
+    setExpenseForm({
+      items: [
+        {
+          id: generateUUID(),
+          category: '',
+          description: '',
+          amountCDF: 0,
+          amountUSD: 0,
+          memo: '',
+        },
+      ],
+      totalCDF: 0,
+      totalUSD: 0,
+    });
+    setSelectedDate(new Date().toISOString().split('T')[0]);
+  };
 
   const calculateUSD = (cdfAmount: number): number => {
     return cdfAmount / EXCHANGE_RATE;
@@ -146,36 +222,78 @@ export default function ExpenseEntryScreen() {
     return true;
   };
 
-  const attachReceipt = async (itemId: string) => {
-    const hasPermission = await requestMediaLibraryPermission();
-    if (!hasPermission) return;
+  const compressImage = async (uri: string): Promise<string> => {
+  try {
+    const result = await ImageManipulator.manipulateAsync(
+      uri,
+      [{ resize: { width: 800 } }],
+      { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
+    );
+    return result.uri;
+  } catch (error) {
+    console.error('Image compression error:', error);
+    return uri; // Return original if compression fails
+  }
+};
 
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: 'images',
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
-      });
+const attachReceipt = async (itemId: string) => {
+  const hasPermission = await requestMediaLibraryPermission();
+  if (!hasPermission) return;
 
-      if (!result.canceled && result.assets[0]) {
-        updateExpenseItem(itemId, 'receiptImage', result.assets[0].uri);
-      }
-    } catch (error) {
-      console.error('Receipt attachment error:', error);
-      Alert.alert('Error', 'Failed to attach receipt image');
+  try {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: 'images',
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      // Compress image before storing
+      const compressedUri = await compressImage(result.assets[0].uri);
+      updateExpenseItem(itemId, 'receiptImage', compressedUri);
     }
-  };
+  } catch (error) {
+    console.error('Receipt attachment error:', error);
+    Alert.alert('Error', 'Failed to attach receipt image');
+  }
+};
 
   const removeReceipt = (itemId: string) => {
     updateExpenseItem(itemId, 'receiptImage', undefined);
   };
 
+  // Expense mutation with optimistic updates
+  const queryClient = useQueryClient();
+  
+  const submitExpensesMutation = useMutation({
+    mutationFn: async (expenseRecords: any[]) => {
+      const { error } = await supabase
+        .from('expenses')
+        .insert(expenseRecords);
+      if (error) throw error;
+    },
+    onMutate: async (newExpenses) => {
+      await queryClient.cancelQueries({ queryKey: ['expenses', selectedDate] });
+      const previousExpenses = queryClient.getQueryData(['expenses', selectedDate]);
+      queryClient.setQueryData(['expenses', selectedDate], (old: any) => 
+        old ? [...old, ...newExpenses] : newExpenses
+      );
+      return { previousExpenses };
+    },
+    onError: (err, newExpenses, context) => {
+      queryClient.setQueryData(['expenses', selectedDate], context?.previousExpenses);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+    },
+  });
+
   const handleSubmitAll = async () => {
     try {
       setLoading(true);
       
-      // Validate that all items have required fields
       const validItems = expenseForm.items.filter(item => 
         item.category && item.description && item.amountCDF > 0
       );
@@ -185,28 +303,26 @@ export default function ExpenseEntryScreen() {
         return;
       }
 
-      // Insert expenses into database
-      for (const item of validItems) {
-        const { error } = await supabase
-          .from('expenses')
-          .insert({
-            category: item.category,
-            description: item.description,
-            amount: item.amountCDF,
-            memo: item.memo,
-            receipt_image: item.receiptImage,
-            expense_date: new Date().toISOString().split('T')[0],
-            payment_method: 'cash', // Default payment method
-            created_by: appUser?.id,
-          });
+      // Batch insert all expenses at once for better performance
+      const expenseRecords = validItems.map(item => ({
+        category: item.category,
+        description: item.memo || item.description,
+        amount: item.amountCDF,
+        receipt_image: item.receiptImage,
+        expense_date: selectedDate,
+        payment_method: 'cash',
+        created_by: appUser?.id,
+      }));
 
-        if (error) {
-          console.error('Error inserting expense:', error);
-        }
-      }
-      
-      Alert.alert('Success', 'All expenses submitted successfully');
-      navigation.goBack();
+      submitExpensesMutation.mutate(expenseRecords, {
+        onSuccess: () => {
+          Alert.alert('Success', 'All expenses submitted successfully');
+          refreshExpenseForm();
+        },
+        onError: () => {
+          Alert.alert('Error', 'Failed to submit expenses');
+        },
+      });
     } catch (error) {
       console.error('Error submitting expenses:', error);
       Alert.alert('Error', 'Failed to submit expenses');
@@ -240,7 +356,7 @@ export default function ExpenseEntryScreen() {
             updateExpenseItem(item.id, 'category', EXPENSE_CATEGORIES[nextIndex]);
           }}
         >
-          <Text style={[styles.dropdownText, !item.category && styles.placeholderText]}>
+          <Text style={styles.dropdownText}>
             {item.category || 'Select a category'}
           </Text>
           <Ionicons name="chevron-down" size={16} color="#666" />
@@ -318,7 +434,7 @@ export default function ExpenseEntryScreen() {
           ) : (
             <View style={styles.receiptPlaceholder}>
               <Ionicons name="attach" size={24} color="#666" />
-              <Text style={styles.receiptPlaceholderText}>Attach a file</Text>
+              <Text style={styles.receiptPlaceholderText}>Tap to attach</Text>
             </View>
           )}
         </TouchableOpacity>
@@ -334,7 +450,12 @@ export default function ExpenseEntryScreen() {
           <TouchableOpacity onPress={() => navigation.goBack()}>
             <Ionicons name="close" size={24} color="#ffffff" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Add Expenses</Text>
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerTitle}>Add Expenses</Text>
+            <TouchableOpacity style={styles.dateButton} onPress={openDatePicker}>
+              <Text style={styles.headerDate}>📅 {selectedDate}</Text>
+            </TouchableOpacity>
+          </View>
           <View style={styles.headerSpacer} />
         </LinearGradient>
 
@@ -368,6 +489,63 @@ export default function ExpenseEntryScreen() {
             <Text style={styles.submitButtonText}>Submit All</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Date Picker Modal */}
+        <Modal visible={showDatePicker} transparent animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={styles.datePickerModal}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Select Date</Text>
+                <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                  <Ionicons name="close" size={24} color="#333" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.calendarHeader}>
+                <TouchableOpacity onPress={() => changeCalendarMonth(-1)}>
+                  <Ionicons name="chevron-back" size={24} color="#312C51" />
+                </TouchableOpacity>
+                <Text style={styles.calendarMonthYear}>
+                  {MONTHS[calendarMonth - 1]} {calendarYear}
+                </Text>
+                <TouchableOpacity onPress={() => changeCalendarMonth(1)}>
+                  <Ionicons name="chevron-forward" size={24} color="#312C51" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.calendarWeekDays}>
+                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
+                  <View key={index} style={styles.weekDayCell}>
+                    <Text style={styles.weekDayText}>{day}</Text>
+                  </View>
+                ))}
+              </View>
+              <FlatList
+                data={renderCalendar()}
+                numColumns={7}
+                keyExtractor={(item, index) => index.toString()}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={[
+                      styles.calendarDayCell,
+                      !item.empty && tempDate.day === item.day && tempDate.month === calendarMonth && tempDate.year === calendarYear && styles.selectedDayCell,
+                    ]}
+                    onPress={() => !item.empty && setTempDate({ ...tempDate, day: item.day })}
+                  >
+                    <Text style={[
+                      styles.calendarDayText,
+                      !item.empty && tempDate.day === item.day && tempDate.month === calendarMonth && tempDate.year === calendarYear && styles.selectedDayText,
+                    ]}>
+                      {item.day || ''}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                scrollEnabled={false}
+              />
+              <TouchableOpacity style={styles.applyDateButton} onPress={applyTempDate}>
+                <Text style={styles.applyDateText}>Apply Date</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </View>
   );
@@ -426,7 +604,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   inputLabel: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#666',
     marginBottom: 6,
     fontWeight: '600',
@@ -436,7 +614,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#f8f8f8',
-    borderRadius: 8,
+    borderRadius: 6,
     padding: 12,
     borderWidth: 1,
     borderColor: '#e0e0e0',
@@ -445,12 +623,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#333',
   },
-  placeholderText: {
-    color: '#999',
-  },
   textInput: {
     backgroundColor: '#f8f8f8',
-    borderRadius: 8,
+    borderRadius: 6,
     padding: 12,
     borderWidth: 1,
     borderColor: '#e0e0e0',
@@ -565,5 +740,97 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#ffffff',
     fontWeight: 'bold',
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  dateButton: {
+    marginTop: 4,
+  },
+  headerDate: {
+    fontSize: 12,
+    color: '#ffffff',
+    opacity: 0.8,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  datePickerModal: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 20,
+    width: '90%',
+    maxWidth: 360,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  calendarMonthYear: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#312C51',
+  },
+  calendarWeekDays: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 8,
+  },
+  weekDayCell: {
+    width: 40,
+    alignItems: 'center',
+  },
+  weekDayText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666',
+  },
+  calendarDayCell: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  calendarDayText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  selectedDayCell: {
+    backgroundColor: '#F0C38E',
+    borderRadius: 20,
+  },
+  selectedDayText: {
+    color: '#312C51',
+    fontWeight: 'bold',
+  },
+  applyDateButton: {
+    backgroundColor: '#312C51',
+    borderRadius: 8,
+    padding: 14,
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  applyDateText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffffff',
   },
 });

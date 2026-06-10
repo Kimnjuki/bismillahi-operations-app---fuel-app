@@ -166,10 +166,8 @@ export default function UnifiedSalesReceiptScreen() {
           .from('daily_sales')
           .insert({
             sale_type: item.itemType,
-            fuel_type: item.itemName.includes('PMS') ? 'Petrol' : 
-                      item.itemName.includes('AGO') ? 'Diesel' : 
-                      item.itemName.includes('DPK') ? 'Kerosene' : 'Gas',
-            drum_type: item.itemType === 'drum' ? item.itemName : null,
+            fuel_type: item.itemName,  // Use 'PMS', 'AGO', 'DPK' directly
+            station_name: receipt.station,
             pump_number: item.itemType === 'pump' ? 1 : null,
             volume_liters: item.itemType === 'pump' ? item.quantity : null,
             quantity: item.itemType === 'drum' ? item.quantity : null,

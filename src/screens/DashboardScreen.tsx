@@ -14,10 +14,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
-import { supabase } from '../config/supabase';
 import { useOffline } from '../hooks/useOffline';
 import { OfflineIndicator } from '../components/OfflineIndicator';
-import { notificationService, Notification } from '../services/notificationService';
+import { useDashboardData } from '../hooks/useDashboardData';
 
 const { width, height } = Dimensions.get('window');
 
@@ -42,20 +41,20 @@ interface MenuItemType {
 export default function DashboardScreen() {
   const { appUser, hasPermission, error: authError } = useAuth();
   const navigation = useNavigation();
-  const { isOnline, getCachedData } = useOffline();
-  const [stats, setStats] = useState<DashboardStats>({
-    todaySales: 0,
-    todayExpenses: 0,
-    stockAlerts: 0,
-    pendingTransfers: 0,
-    monthlyGrowth: 0,
-    totalTransactions: 0,
-  });
-  const [loading, setLoading] = useState(true);
+  const { isOnline } = useOffline();
+
+  const {
+    stats,
+    notifications,
+    statsLoading,
+    notificationsLoading,
+    statsError,
+    refetch,
+    isOnline: hookIsOnline,
+  } = useDashboardData();
+
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [notificationCount, setNotificationCount] = useState(0);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
 
   const menuItems: MenuItemType[] = useMemo(() => [
     {
@@ -65,6 +64,14 @@ export default function DashboardScreen() {
       screen: 'SalesEntry',
       requiredRole: 'cashier',
       gradient: ['#FF6B6B', '#FF8E8E'],
+    },
+    {
+      title: 'Sales Records',
+      subtitle: 'View all sales',
+      icon: '📋',
+      screen: 'SalesRecords',
+      requiredRole: 'cashier',
+      gradient: ['#4FC3F7', '#29B6F6'],
     },
     {
       title: 'Stock',
@@ -90,38 +97,38 @@ export default function DashboardScreen() {
       requiredRole: 'manager',
       gradient: ['#9C27B0', '#BA68C8'],
     },
-      {
-        title: 'Creditors & Suppliers',
-        subtitle: 'Manage vendors',
-        icon: '🏢',
-        screen: 'CreditorsSuppliers',
-        requiredRole: 'manager',
-        gradient: ['#607D8B', '#78909C'],
-      },
-      {
-        title: 'Station Settings',
-        subtitle: 'Configure stations',
-        icon: '⚙️',
-        screen: 'StationSettings',
-        requiredRole: 'admin',
-        gradient: ['#795548', '#8D6E63'],
-      },
-      {
-        title: 'Pump Management',
-        subtitle: 'Manage pumps',
-        icon: '⛽',
-        screen: 'PumpManagement',
-        requiredRole: 'admin',
-        gradient: ['#E91E63', '#F06292'],
-      },
-      {
-        title: 'Pump Dipping',
-        subtitle: 'Tank readings & variance',
-        icon: '📊',
-        screen: 'PumpDippingManagement',
-        requiredRole: 'admin',
-        gradient: ['#3F51B5', '#5C6BC0'],
-      },
+    {
+      title: 'Creditors & Suppliers',
+      subtitle: 'Manage vendors',
+      icon: '🏢',
+      screen: 'CreditorsSuppliers',
+      requiredRole: 'manager',
+      gradient: ['#607D8B', '#78909C'],
+    },
+    {
+      title: 'Station Settings',
+      subtitle: 'Configure stations',
+      icon: '⚙️',
+      screen: 'StationSettings',
+      requiredRole: 'admin',
+      gradient: ['#795548', '#8D6E63'],
+    },
+    {
+      title: 'Pump Management',
+      subtitle: 'Manage pumps',
+      icon: '⛽',
+      screen: 'PumpManagement',
+      requiredRole: 'admin',
+      gradient: ['#E91E63', '#F06292'],
+    },
+    {
+      title: 'Pump Dipping',
+      subtitle: 'Tank readings & variance',
+      icon: '📊',
+      screen: 'PumpDippingManagement',
+      requiredRole: 'admin',
+      gradient: ['#3F51B5', '#5C6BC0'],
+    },
     {
       title: 'Fuel Delivery',
       subtitle: 'Track deliveries & stock',
@@ -148,9 +155,9 @@ export default function DashboardScreen() {
     },
     {
       title: 'Reports',
-      subtitle: 'Daily Report',
+      subtitle: 'View All Reports',
       icon: '📊',
-      screen: 'DailyConsolidatedReport',
+      screen: 'Reports',
       requiredRole: 'viewer',
       gradient: ['#42A5F5', '#64B5F6'],
     },
@@ -188,96 +195,22 @@ export default function DashboardScreen() {
     },
   ], []);
 
-  const loadDashboardData = useCallback(async () => {
-    try {
-      setError(null);
-      
-      // Load cached data first if offline
-      if (!isOnline) {
-        const cachedStats = await getCachedData('dashboard_stats');
-        if (cachedStats && typeof cachedStats === 'object' && !Array.isArray(cachedStats)) {
-          setStats(cachedStats as unknown as DashboardStats);
-          setLoading(false);
-          return;
-        }
-      }
-
-      // Fetch fresh data from database
-      const today = new Date().toISOString().split('T')[0];
-      
-      // Fetch today's sales from daily_sales table
-      const { data: salesData } = await supabase
-        .from('daily_sales')
-        .select('total_amount')
-        .gte('sale_date', today);
-
-      const todaySales = salesData?.reduce((sum, sale) => sum + (sale.total_amount || 0), 0) || 0;
-
-      // Load notifications
-      const loadedNotifications = await notificationService.loadNotifications();
-      setNotifications(loadedNotifications);
-      setNotificationCount(loadedNotifications.filter(n => !n.isRead).length);
-
-      // Fetch today's expenses
-      const { data: expensesData } = await supabase
-        .from('expenses')
-        .select('amount')
-        .gte('expense_date', today);
-
-      const todayExpenses = expensesData?.reduce((sum, expense) => sum + (expense.amount || 0), 0) || 0;
-
-      // Fetch stock alerts
-      const { data: stockData } = await supabase
-        .from('stock_items')
-        .select('current_stock, minimum_stock');
-
-      // Filter in JS since PostgREST doesn't support column-to-column comparisons
-      const stockAlerts = stockData?.filter(item => 
-        (item.current_stock || 0) < (item.minimum_stock || 0)
-      ).length || 0;
-
-      // Fetch pending transfers
-      const { data: transfersData } = await supabase
-        .from('fund_transfers')
-        .select('id')
-        .eq('status', 'pending');
-
-      const pendingTransfers = transfersData?.length || 0;
-
-      const newStats: DashboardStats = {
-        todaySales,
-        todayExpenses,
-        stockAlerts,
-        pendingTransfers,
-        monthlyGrowth: 12.5, // Mock data
-        totalTransactions: (salesData?.length || 0) + (expensesData?.length || 0),
-      };
-
-      setStats(newStats);
-
-      // Load notification count
-      const { data: notificationsData } = await supabase
-        .from('notifications')
-        .select('id')
-        .eq('user_id', appUser?.id)
-        .eq('is_read', false);
-
-      setNotificationCount(notificationsData?.length || 0);
-    } catch (error) {
-      console.error('Error loading dashboard data:', error);
-      setError('Failed to load dashboard data');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [isOnline, getCachedData, appUser?.id]);
+  useEffect(() => {
+    setNotificationCount(notifications.filter(n => !n.isRead).length);
+  }, [notifications]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    loadDashboardData();
-  }, [loadDashboardData]);
+    refetch();
+    setRefreshing(false);
+  }, [refetch]);
 
   const handleMenuPress = useCallback((item: MenuItemType) => {
+    // Special handling: map 'Reports' screen to the ReportsScreen
+    if (item.screen === 'Reports') {
+      (navigation as any).navigate('Reports');
+      return;
+    }
     if (!hasPermission(item.requiredRole)) {
       Alert.alert('Access Denied', 'You do not have permission to access this feature.');
       return;
@@ -320,11 +253,7 @@ export default function DashboardScreen() {
     );
   };
 
-  useEffect(() => {
-    loadDashboardData();
-  }, [loadDashboardData]);
-
-  if (loading) {
+  if (statsLoading) {
     return (
       <LinearGradient colors={['#667eea', '#764ba2']} style={styles.container}>
         <SafeAreaView style={styles.safeArea}>
@@ -336,13 +265,13 @@ export default function DashboardScreen() {
     );
   }
 
-  if (error) {
+  if (statsError) {
     return (
       <LinearGradient colors={['#667eea', '#764ba2']} style={styles.container}>
         <SafeAreaView style={styles.safeArea}>
           <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={loadDashboardData}>
+            <Text style={styles.errorText}>Failed to load dashboard data</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={refetch}>
               <Text style={styles.retryButtonText}>Retry</Text>
             </TouchableOpacity>
           </View>
@@ -423,7 +352,7 @@ export default function DashboardScreen() {
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.quickActionButton}
-              onPress={() => handleMenuPress(menuItems[11])} // Reports
+              onPress={() => handleMenuPress(menuItems.find(m => m.screen === 'Reports') || menuItems[11])} // Reports
             >
               <Text style={styles.quickActionIcon}>📊</Text>
               <Text style={styles.quickActionText}>View Reports</Text>

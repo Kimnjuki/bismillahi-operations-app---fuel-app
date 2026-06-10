@@ -19,11 +19,7 @@ class FuelDeliveryService {
     try {
       const { data, error } = await supabase
         .from('fuel_deliveries')
-        .select(`
-          *,
-          transporter:transporters(*),
-          station:stations(*)
-        `)
+        .select('*')
         .order('delivery_date', { ascending: false });
 
       if (error) throw error;
@@ -48,16 +44,11 @@ class FuelDeliveryService {
       const { data, error } = await supabase
         .from('fuel_deliveries')
         .insert([delivery])
-        .select(`
-          *,
-          transporter:transporters(*),
-          station:stations(*)
-        `)
+        .select()
         .single();
 
       if (error) throw error;
 
-      // Update fuel stock
       await this.updateFuelStock(delivery.station_id, delivery.product, delivery.quantity_liters);
 
       return {
@@ -81,11 +72,7 @@ class FuelDeliveryService {
         .from('fuel_deliveries')
         .update({ ...updates, updated_at: new Date().toISOString() })
         .eq('id', id)
-        .select(`
-          *,
-          transporter:transporters(*),
-          station:stations(*)
-        `)
+        .select()
         .single();
 
       if (error) throw error;
@@ -210,7 +197,7 @@ class FuelDeliveryService {
     try {
       const { error } = await supabase
         .from('transporters')
-        .update({ is_active: false, updated_at: new Date().toISOString() })
+        .delete()
         .eq('id', id);
 
       if (error) throw error;
@@ -261,10 +248,7 @@ class FuelDeliveryService {
     try {
       const { data, error } = await supabase
         .from('tax_payments')
-        .select(`
-          *,
-          transporter:transporters(*)
-        `)
+        .select('*')
         .order('payment_date', { ascending: false });
 
       if (error) throw error;
@@ -289,10 +273,7 @@ class FuelDeliveryService {
       const { data, error } = await supabase
         .from('tax_payments')
         .insert([payment])
-        .select(`
-          *,
-          transporter:transporters(*)
-        `)
+        .select()
         .single();
 
       if (error) throw error;
@@ -317,10 +298,7 @@ class FuelDeliveryService {
     try {
       let query = supabase
         .from('truck_transactions')
-        .select(`
-          *,
-          transporter:transporters(*)
-        `)
+        .select('*')
         .order('transaction_date', { ascending: false });
 
       if (truckId) {
@@ -351,10 +329,7 @@ class FuelDeliveryService {
       const { data, error } = await supabase
         .from('truck_transactions')
         .insert([transaction])
-        .select(`
-          *,
-          transporter:transporters(*)
-        `)
+        .select()
         .single();
 
       if (error) throw error;
@@ -379,10 +354,7 @@ class FuelDeliveryService {
     try {
       let query = supabase
         .from('fuel_stock')
-        .select(`
-          *,
-          station:stations(*)
-        `)
+        .select('*')
         .order('last_updated', { ascending: false });
 
       if (stationId) {
@@ -410,7 +382,6 @@ class FuelDeliveryService {
 
   async updateFuelStock(stationId: string, product: string, quantity: number): Promise<ApiResponse<FuelStock>> {
     try {
-      // Get current stock
       const { data: currentStock } = await supabase
         .from('fuel_stock')
         .select('*')
@@ -419,20 +390,15 @@ class FuelDeliveryService {
         .single();
 
       if (currentStock) {
-        // Update existing stock
         const newStock = currentStock.current_stock + quantity;
         const { data, error } = await supabase
           .from('fuel_stock')
           .update({
             current_stock: newStock,
             last_updated: new Date().toISOString(),
-            updated_at: new Date().toISOString()
           })
           .eq('id', currentStock.id)
-          .select(`
-            *,
-            station:stations(*)
-          `)
+          .select()
           .single();
 
         if (error) throw error;
@@ -443,21 +409,17 @@ class FuelDeliveryService {
           success: true,
         };
       } else {
-        // Create new stock record
         const { data, error } = await supabase
           .from('fuel_stock')
           .insert([{
             station_id: stationId,
             product,
             current_stock: quantity,
-            capacity: 100000, // Default capacity
+            capacity: 100000,
             last_updated: new Date().toISOString(),
             updated_by: 'system'
           }])
-          .select(`
-            *,
-            station:stations(*)
-          `)
+          .select()
           .single();
 
         if (error) throw error;

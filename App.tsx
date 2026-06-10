@@ -2,26 +2,42 @@ import React, { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { View, Text, StyleSheet } from 'react-native';
-import * as ExpoSplashScreen from 'expo-splash-screen';
-import * as Font from 'expo-font';
-import { LinearGradient } from 'expo-linear-gradient';
+import { View, Text, StyleSheet, ActivityIndicator, LogBox } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+// Suppress warnings for faster startup
+LogBox.ignoreLogs(['Warning:', 'Each child in a list']);
+
+// Create QueryClient instance
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      gcTime: 30 * 60 * 1000, // 30 minutes (was cacheTime in v4)
+      retry: 2,
+      retryDelay: attempt => Math.min(1000 * 2 ** attempt, 30000),
+    },
+  },
+});
 
 // Context
 import { AuthProvider, useAuth } from './src/context/AuthContext';
-import { SecurityProvider } from './src/context/SecurityContext';
-import { syncService } from './src/services/syncService';
-import { notificationService } from './src/services/notificationService';
-import { loggingService } from './src/services/loggingService';
 
-// Screens
+// Auth screens (always loaded)
 import PinLoginScreen from './src/screens/PinLoginScreen';
 import PinSetupScreen from './src/screens/PinSetupScreen';
-import WelcomeOnboardingScreen from './src/screens/WelcomeOnboardingScreen';
 import WelcomeScreen from './src/screens/WelcomeScreen';
+
+// Dashboard (loaded on auth)
 import DashboardScreen from './src/screens/DashboardScreen';
+
+// Sales Records
+import SalesRecordsScreen from './src/screens/SalesRecordsScreen';
+
+// All remaining screens imported for navigation
 import SalesEntryScreen from './src/screens/SalesEntryScreen';
 import UnifiedSalesReceiptScreen from './src/screens/UnifiedSalesReceiptScreen';
 import StockManagementScreen from './src/screens/StockManagementScreen';
@@ -65,41 +81,30 @@ import TransporterManagementScreen from './src/screens/TransporterManagementScre
 import TaxPaymentScreen from './src/screens/TaxPaymentScreen';
 import TruckTransactionHistoryScreen from './src/screens/TruckTransactionHistoryScreen';
 import AddTransporterScreen from './src/screens/AddTransporterScreen';
-
-// Keep splash screen visible while we fetch resources
-ExpoSplashScreen.preventAutoHideAsync();
+import AddTankScreen from './src/screens/AddTankScreen';
 
 const Stack = createNativeStackNavigator();
 
-// Loading component with logo matching SplashScreen
-const LoadingScreen = () => (
-  <LinearGradient colors={['#312C51', '#48426D']} style={styles.gradient}>
-    <View style={styles.centerContent}>
-      <View style={styles.logoCircle}>
-        <View style={styles.logoIcon}>
-          <View style={styles.iconVerticalLine} />
-          <View style={styles.iconCenterCircle} />
-          <View style={styles.iconTopLine} />
-          <View style={styles.iconBottomLine} />
-        </View>
-      </View>
-      <Text style={styles.appName}>BISMILLAHI OPERATIONS</Text>
-      <Text style={styles.tagline}>Your Fuel Station Management Solution</Text>
+// Loading screen shown during app initialization
+function LoadingScreen() {
+  return (
+    <View style={{ flex: 1, backgroundColor: '#312C51', justifyContent: 'center', alignItems: 'center' }}>
+      <ActivityIndicator size="large" color="#F0C38E" />
+      <Text style={{ color: '#F0C38E', marginTop: 16, fontSize: 16 }}>Loading Bismillahi Operations...</Text>
     </View>
-  </LinearGradient>
-);
+  );
+}
 
-// Navigation component that handles auth state
+// Navigation component - simplified for fast startup
 function AppNavigation() {
   const { appUser, isAuthenticated, loading } = useAuth();
 
+  // Show minimal loading while auth is loading - instant response
   if (loading) {
     return <LoadingScreen />;
   }
 
   // Determine initial route based on auth state
-  // Note: All screens are always registered, but the initial route
-  // and conditional logic determine which screens are accessible
   const isLoggedIn = isAuthenticated && !!appUser;
 
   return (
@@ -112,7 +117,7 @@ function AppNavigation() {
           animation: 'slide_from_right',
         }}
       >
-        {/* Auth screens - always available */}
+        {/* Auth screens */}
         <Stack.Screen
           name="PinLogin"
           component={PinLoginScreen}
@@ -129,19 +134,13 @@ function AppNavigation() {
             headerTitleStyle: { fontWeight: 'bold' },
           }}
         />
-        <Stack.Screen name="Loading" component={LoadingScreen} />
-
-        {/* Authenticated app screens */}
-        <Stack.Screen
-          name="WelcomeOnboarding"
-          component={WelcomeOnboardingScreen}
-          options={{ gestureEnabled: false }}
-        />
         <Stack.Screen
           name="Welcome"
           component={WelcomeScreen}
           options={{ gestureEnabled: false }}
         />
+
+        {/* Authenticated app screens */}
         <Stack.Screen
           name="Dashboard"
           component={DashboardScreen}
@@ -237,6 +236,14 @@ function AppNavigation() {
           name="SalesReceipt"
           component={UnifiedSalesReceiptScreen}
           options={{ title: 'Unified Sales Receipt', headerShown: false }}
+        />
+        <Stack.Screen
+          name="SalesRecords"
+          component={SalesRecordsScreen}
+          options={{
+            title: 'Sales Records',
+            headerShown: false,
+          }}
         />
         <Stack.Screen
           name="StockManagement"
@@ -459,153 +466,29 @@ function AppNavigation() {
           component={AddTransporterScreen}
           options={{ title: 'Add Transporter', headerShown: false }}
         />
+        <Stack.Screen
+          name="AddTank"
+          component={AddTankScreen}
+          options={{ title: 'Add Tank', headerShown: false }}
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );
 }
 
 export default function App() {
-  const [appIsReady, setAppIsReady] = useState(false);
-
-  useEffect(() => {
-    let isMounted = true;
-    let timeoutId: ReturnType<typeof setTimeout>;
-
-    async function prepare() {
-      try {
-        // Fire and forget the async services - don't block on them
-        syncService.initialize().catch(e => console.warn('Sync init error:', e));
-        notificationService.loadNotifications().catch(e => console.warn('Notif load error:', e));
-        loggingService.initialize().catch(e => console.warn('Logging init error:', e));
-        await Font.loadAsync({});
-      } catch (e) {
-        console.warn('Error during app preparation:', e);
-      }
-    }
-
-    // Safety timeout - force ready after 3 seconds max
-    timeoutId = setTimeout(() => {
-      if (isMounted) {
-        setAppIsReady(true);
-      }
-    }, 3000);
-
-    prepare().then(() => {
-      if (isMounted) {
-        setAppIsReady(true);
-      }
-    });
-
-    return () => {
-      isMounted = false;
-      clearTimeout(timeoutId);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (appIsReady) {
-      ExpoSplashScreen.hideAsync();
-    }
-  }, [appIsReady]);
-
-  if (!appIsReady) {
-    return <LoadingScreen />;
-  }
-
   return (
-    <SafeAreaProvider>
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        <AuthProvider>
-          <SecurityProvider>
-            <AppNavigation />
-            <StatusBar style="light" />
-          </SecurityProvider>
-        </AuthProvider>
-      </GestureHandlerRootView>
-    </SafeAreaProvider>
+    <ErrorBoundary>
+      <SafeAreaProvider>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <QueryClientProvider client={queryClient}>
+            <AuthProvider>
+              <AppNavigation />
+              <StatusBar style="light" />
+            </AuthProvider>
+          </QueryClientProvider>
+        </GestureHandlerRootView>
+      </SafeAreaProvider>
+    </ErrorBoundary>
   );
 }
-
-const styles = StyleSheet.create({
-  gradient: {
-    flex: 1,
-  },
-  centerContent: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-  },
-  logoCircle: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#48426D',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 40,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  logoIcon: {
-    width: 40,
-    height: 60,
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-  },
-  iconVerticalLine: {
-    position: 'absolute',
-    width: 4,
-    height: 50,
-    backgroundColor: '#F0C38E',
-    borderRadius: 2,
-  },
-  iconCenterCircle: {
-    position: 'absolute',
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#F0C38E',
-    top: 24,
-  },
-  iconTopLine: {
-    position: 'absolute',
-    width: 16,
-    height: 3,
-    backgroundColor: '#F0C38E',
-    borderRadius: 1.5,
-    top: 8,
-  },
-  iconBottomLine: {
-    position: 'absolute',
-    width: 16,
-    height: 3,
-    backgroundColor: '#F0C38E',
-    borderRadius: 1.5,
-    bottom: 8,
-  },
-  appName: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#F0C38E',
-    textAlign: 'center',
-    marginBottom: 8,
-    letterSpacing: 1,
-  },
-  tagline: {
-    fontSize: 16,
-    color: '#F1AA9B',
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-});
-   

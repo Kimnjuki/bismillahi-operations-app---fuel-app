@@ -255,15 +255,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 20,
+    flexWrap: 'wrap',
   },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#ffffff',
+    flex: 1,
+    minWidth: 120,
   },
   headerButtons: {
     flexDirection: 'row',
     gap: 10,
+    flexWrap: 'wrap',
   },
   periodButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',

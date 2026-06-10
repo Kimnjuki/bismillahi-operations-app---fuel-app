@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, memo } from 'react';
 import {
   View,
   StyleSheet,
   Text,
   TouchableOpacity,
-  ScrollView,
   SafeAreaView,
   RefreshControl,
   Alert,
@@ -13,7 +12,25 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { notificationService, Notification } from '../services/notificationService';
+import { FlashList } from '@shopify/flash-list';
 import { NotificationCard } from '../components/NotificationCard';
+
+// Memoized notification card wrapper
+const MemoizedNotificationCard = memo(({ 
+  notification, 
+  onPress, 
+  onActionPress 
+}: { 
+  notification: Notification; 
+  onPress: (notification: Notification) => void;
+  onActionPress: (notification: Notification) => void;
+}) => (
+  <NotificationCard
+    notification={notification}
+    onPress={onPress}
+    onActionPress={onActionPress}
+  />
+));
 
 export default function NotificationsScreen() {
   const navigation = useNavigation();
@@ -39,25 +56,27 @@ export default function NotificationsScreen() {
     loadNotifications();
   }, [loadNotifications]);
 
-  const handleNotificationPress = async (notification: Notification) => {
-    // Mark as read if not already read
+  const handleNotificationPress = useCallback(async (notification: Notification) => {
     if (!notification.isRead) {
       await notificationService.markAsRead(notification.id);
+      setNotifications(prev => 
+        prev.map(n => n.id === notification.id ? { ...n, isRead: true } : n)
+      );
     }
 
-    // Navigate to the appropriate screen
     if (notification.actionScreen) {
       navigation.navigate(notification.actionScreen as never);
     }
-  };
+  }, [navigation]);
 
-  const handleActionPress = async (notification: Notification) => {
-    // Mark as read if not already read
+  const handleActionPress = useCallback(async (notification: Notification) => {
     if (!notification.isRead) {
       await notificationService.markAsRead(notification.id);
+      setNotifications(prev => 
+        prev.map(n => n.id === notification.id ? { ...n, isRead: true } : n)
+      );
     }
 
-    // Navigate to the appropriate screen based on action type
     switch (notification.actionType) {
       case 'view_stock':
         navigation.navigate('StockManagement' as never);
@@ -74,12 +93,12 @@ export default function NotificationsScreen() {
         }
         break;
     }
-  };
+  }, [navigation]);
 
   const handleMarkAllAsRead = async () => {
     try {
       await notificationService.markAllAsRead();
-      await loadNotifications();
+      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
     } catch (error) {
       console.error('Error marking all as read:', error);
     }
@@ -95,7 +114,6 @@ export default function NotificationsScreen() {
           text: 'Clear',
           style: 'destructive',
           onPress: () => {
-            // This would typically clear notifications from the database
             setNotifications([]);
           },
         },
@@ -143,9 +161,29 @@ export default function NotificationsScreen() {
     );
   };
 
+  const renderNotificationItem = useCallback(({ item }: { item: Notification }) => (
+    <MemoizedNotificationCard
+      notification={item}
+      onPress={handleNotificationPress}
+      onActionPress={handleActionPress}
+    />
+  ), [handleNotificationPress, handleActionPress]);
+
   useEffect(() => {
     loadNotifications();
   }, [loadNotifications]);
+
+  if (loading) {
+    return (
+      <LinearGradient colors={['#312C51', '#48426D']} style={styles.container}>
+        <SafeAreaView style={styles.safeArea}>
+          <View style={styles.loadingContainer}>
+            <Text style={styles.loadingText}>Loading notifications...</Text>
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
+    );
+  }
 
   return (
     <LinearGradient colors={['#312C51', '#48426D']} style={styles.container}>
@@ -172,36 +210,24 @@ export default function NotificationsScreen() {
         {renderNotificationStats()}
 
         {/* Notifications List */}
-        <ScrollView
-          style={styles.content}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-          showsVerticalScrollIndicator={false}
-        >
-          {loading ? (
-            <View style={styles.loadingContainer}>
-              <Text style={styles.loadingText}>Loading notifications...</Text>
-            </View>
-          ) : notifications.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Ionicons name="notifications-outline" size={64} color="rgba(255, 255, 255, 0.3)" />
-              <Text style={styles.emptyTitle}>No Notifications</Text>
-              <Text style={styles.emptySubtitle}>
-                You're all caught up! New notifications will appear here.
-              </Text>
-            </View>
-          ) : (
-            notifications.map((notification) => (
-              <NotificationCard
-                key={notification.id}
-                notification={notification}
-                onPress={handleNotificationPress}
-                onActionPress={handleActionPress}
-              />
-            ))
-          )}
-        </ScrollView>
+        {notifications.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="notifications-outline" size={64} color="rgba(255, 255, 255, 0.3)" />
+            <Text style={styles.emptyTitle}>No Notifications</Text>
+            <Text style={styles.emptySubtitle}>
+              You're all caught up! New notifications will appear here.
+            </Text>
+          </View>
+        ) : (
+          <FlashList
+            data={notifications as any}
+            renderItem={renderNotificationItem as any}
+            estimatedItemSize={100}
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            contentContainerStyle={styles.flashListContent}
+          />
+        )}
       </SafeAreaView>
     </LinearGradient>
   );
@@ -255,8 +281,8 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.7)',
     textAlign: 'center',
   },
-  content: {
-    flex: 1,
+  flashListContent: {
+    flexGrow: 1,
     paddingHorizontal: 16,
   },
   loadingContainer: {
@@ -274,6 +300,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 60,
+    paddingHorizontal: 16,
   },
   emptyTitle: {
     fontSize: 20,

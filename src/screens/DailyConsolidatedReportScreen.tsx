@@ -84,8 +84,9 @@ export default function DailyConsolidatedReportScreen() {
       // Load sales data for the selected station and date
       const { data: salesData } = await supabase
         .from('daily_sales')
-        .select('fuel_type, total_amount, sale_type')
-        .eq('sale_date', dateString);
+        .select('fuel_type, total_amount, sale_type, station_name')
+        .eq('sale_date', dateString)
+        .eq('station_name', selectedStation);
 
       // Load expenses data for the selected station and date
       const { data: expensesData } = await supabase

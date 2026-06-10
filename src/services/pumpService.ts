@@ -13,7 +13,6 @@ class PumpService {
         .from('pumps')
         .select('*')
         .eq('station_id', stationId)
-        .eq('is_active', true)
         .order('pump_number', { ascending: true });
 
       if (error) throw error;
@@ -39,7 +38,6 @@ class PumpService {
       const { data, error } = await supabase
         .from('pumps')
         .select('*')
-        .eq('is_active', true)
         .order('station_id', { ascending: true })
         .order('pump_number', { ascending: true });
 
@@ -121,10 +119,7 @@ class PumpService {
     try {
       const { error } = await supabase
         .from('pumps')
-        .update({
-          is_active: false,
-          updated_at: new Date().toISOString(),
-        })
+        .delete()
         .eq('id', id);
 
       if (error) throw error;
@@ -161,7 +156,6 @@ class PumpService {
         .from('pumps')
         .select('pump_number')
         .eq('station_id', stationId)
-        .eq('is_active', true)
         .order('pump_number', { ascending: false })
         .limit(1);
 

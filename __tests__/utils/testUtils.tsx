@@ -118,8 +118,11 @@ export const createMockRoute = (params = {}) => ({
   name: 'Test',
 });
 
+// Re-export everything from testing library
+export * from '@testing-library/react-native';
+
 // Test helpers
-export const waitFor = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+export const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const mockAsyncStorage = {
   getItem: jest.fn(),

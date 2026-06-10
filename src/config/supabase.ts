@@ -1,10 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
-import Constants from 'expo-constants';
 
 // Environment variables - For Expo Go compatibility, values are hardcoded
 // since process.env is not available in the Expo Go client
 const supabaseUrl = 'https://bdjoknphffficrepbxim.supabase.co';
-const supabaseAnonKey = 'sb_publishable_XUvsC3aQUTpITX64S3yrNw_q4DnyqBf';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJkam9rbnBoZmZmaWNyZXBieGltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzE1MTk2ODAsImV4cCI6MjA0NzA5NTY4MH0.9K7Q3aQUTpITX64S3yrNw_q4DnyqBf';
 
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase configuration. Please check your setup.');
@@ -71,7 +70,6 @@ export type DatabaseFundTransfer = FundTransfer;
 export type DatabaseExchangeRate = ExchangeRate;
 export type DatabaseNotification = Notification;
 export type DatabaseExpenseCategory = ExpenseCategory;
-
 
 // Helper functions
 export const signIn = async (email: string, password: string) => {

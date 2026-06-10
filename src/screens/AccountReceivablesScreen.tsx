@@ -1,16 +1,15 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, memo } from 'react';
 import {
   View,
   StyleSheet,
   Text,
   TouchableOpacity,
-  ScrollView,
   Alert,
-  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { FlashList } from '@shopify/flash-list';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { accountService } from '../services/accountService';
@@ -18,6 +17,40 @@ import { formatCurrency } from '../constants/currency';
 import { AccountReceivable, AccountStatus, AccountType } from '../types';
 
 type TabType = 'receivables' | 'payables';
+
+// Memoized list item component for performance
+const ReceivableItem = memo(({ 
+  creditor, 
+  onPress 
+}: { 
+  creditor: AccountReceivable; 
+  onPress: (creditor: AccountReceivable) => void;
+}) => {
+  return (
+    <TouchableOpacity 
+      style={styles.creditorCard}
+      onPress={() => onPress(creditor)}
+    >
+      <Text style={styles.creditorName}>{creditor.creditor_name}</Text>
+      <Text style={styles.dueDate}>
+        Due: {new Date(creditor.due_date).toLocaleDateString('en-US', { 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric' 
+        })}
+      </Text>
+      <Text style={[
+        styles.amount,
+        { color: creditor.currency === 'USD' ? '#ffffff' : '#F0C38E' }
+      ]}>
+        {creditor.currency} {creditor.total_amount?.toLocaleString() || '0'}
+      </Text>
+      {creditor.status === 'overdue' && (
+        <Text style={styles.overdueStatus}>Overdue</Text>
+      )}
+    </TouchableOpacity>
+  );
+});
 
 export default function AccountReceivablesScreen() {
   const { appUser } = useAuth();
@@ -35,12 +68,10 @@ export default function AccountReceivablesScreen() {
       if (response.success && response.data && response.data.length > 0) {
         setReceivables(response.data);
       } else {
-        // No real data - show empty state
         setReceivables([]);
       }
     } catch (error) {
       console.error('Error loading receivables:', error);
-      // Show empty state on error instead of fake data
       setReceivables([]);
     } finally {
       setLoading(false);
@@ -81,39 +112,14 @@ export default function AccountReceivablesScreen() {
     );
   };
 
-  const getStatusColor = (status: AccountStatus) => {
-    switch (status) {
-      case 'overdue':
-        return '#FF6B35';
-      case 'pending':
-        return '#FFA726';
-      case 'paid':
-        return '#4CAF50';
-      case 'partial':
-        return '#2196F3';
-      case 'cancelled':
-        return '#9E9E9E';
-      default:
-        return '#ffffff';
-    }
-  };
+  // Filter receivables for display (pending and overdue only)
+  const displayReceivables = receivables.filter(
+    creditor => creditor.status !== 'paid' && creditor.status !== 'cancelled'
+  );
 
-  const getStatusText = (status: AccountStatus) => {
-    switch (status) {
-      case 'overdue':
-        return 'Overdue';
-      case 'pending':
-        return 'Pending';
-      case 'paid':
-        return 'Paid';
-      case 'partial':
-        return 'Partial';
-      case 'cancelled':
-        return 'Cancelled';
-      default:
-        return status;
-    }
-  };
+  const renderReceivableItem = useCallback(({ item }: { item: AccountReceivable }) => (
+    <ReceivableItem creditor={item} onPress={handleCreditorPress} />
+  ), [handleCreditorPress]);
 
   const renderTabButton = (tab: TabType, label: string) => (
     <TouchableOpacity
@@ -125,32 +131,6 @@ export default function AccountReceivablesScreen() {
         {label}
       </Text>
       {activeTab === tab && <View style={styles.tabUnderline} />}
-    </TouchableOpacity>
-  );
-
-  const renderCreditorCard = (creditor: AccountReceivable) => (
-    <TouchableOpacity 
-      key={creditor.id} 
-      style={styles.creditorCard}
-      onPress={() => handleCreditorPress(creditor)}
-    >
-      <Text style={styles.creditorName}>{creditor.creditor_name}</Text>
-      <Text style={styles.dueDate}>
-        Due: {new Date(creditor.due_date).toLocaleDateString('en-US', { 
-          year: 'numeric', 
-          month: 'long', 
-          day: 'numeric' 
-        })}
-      </Text>
-      <Text style={[
-        styles.amount,
-        { color: creditor.currency === 'USD' ? '#ffffff' : '#F0C38E' }
-      ]}>
-        {creditor.currency} {creditor.total_amount?.toLocaleString() || '0'}
-      </Text>
-      {creditor.status === 'overdue' && (
-        <Text style={styles.overdueStatus}>Overdue</Text>
-      )}
     </TouchableOpacity>
   );
 
@@ -185,28 +165,25 @@ export default function AccountReceivablesScreen() {
             </TouchableOpacity>
           </View>
 
-          <ScrollView 
-            style={styles.creditorsList}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-            }
-            showsVerticalScrollIndicator={false}
-          >
-            {loading ? (
-              <View style={styles.loadingContainer}>
-                <Text style={styles.loadingText}>Loading...</Text>
-              </View>
-            ) : receivables.length > 0 ? (
-              receivables
-                .filter(creditor => creditor.status !== 'paid' && creditor.status !== 'cancelled')
-                .map(renderCreditorCard)
-            ) : (
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>No outstanding receivables</Text>
-                <Text style={styles.emptySubtext}>Add a new creditor to get started</Text>
-              </View>
-            )}
-          </ScrollView>
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <Text style={styles.loadingText}>Loading...</Text>
+            </View>
+          ) : displayReceivables.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No outstanding receivables</Text>
+              <Text style={styles.emptySubtext}>Add a new creditor to get started</Text>
+            </View>
+          ) : (
+            <FlashList
+              data={displayReceivables as any}
+              renderItem={renderReceivableItem as any}
+              estimatedItemSize={80}
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              contentContainerStyle={styles.flashListContent}
+            />
+          )}
         </View>
 
         {/* View All Button */}
@@ -254,9 +231,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     position: 'relative',
   },
-  activeTabButton: {
-    // Active tab styling handled by text color
-  },
+  activeTabButton: {},
   tabText: {
     fontSize: 16,
     fontWeight: '600',
@@ -301,8 +276,8 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#312C51',
   },
-  creditorsList: {
-    flex: 1,
+  flashListContent: {
+    flexGrow: 1,
   },
   creditorCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',

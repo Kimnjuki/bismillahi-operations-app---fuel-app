@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { securityService } from '../services/securityService';
 import { secureApiService } from '../services/secureApiService';
 import { supabase } from '../config/supabase';
@@ -151,24 +151,38 @@ export const SecurityProvider: React.FC<SecurityProviderProps> = ({ children }) 
     }
   };
 
+  // Store interval ref for cleanup
+  const securityCheckIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   // Initialize security context
   useEffect(() => {
+    let isMounted = true;
+
     const initializeSecurity = async () => {
       // Perform initial security check
       await performSecurityCheck();
+      if (!isMounted) return;
 
       // Set up periodic security checks (every 5 minutes)
-      const securityCheckInterval = setInterval(performSecurityCheck, 5 * 60 * 1000);
-
-      // Cleanup interval on unmount
-      return () => {
-        clearInterval(securityCheckInterval);
-        secureApiService.cleanup();
-      };
+      securityCheckIntervalRef.current = setInterval(() => {
+        if (isMounted) {
+          performSecurityCheck();
+        }
+      }, 5 * 60 * 1000);
     };
 
     initializeSecurity();
-  }, []);
+
+    // Cleanup interval on unmount
+    return () => {
+      isMounted = false;
+      if (securityCheckIntervalRef.current) {
+        clearInterval(securityCheckIntervalRef.current);
+        securityCheckIntervalRef.current = null;
+      }
+      secureApiService.cleanup();
+    };
+  }, [performSecurityCheck]);
 
   // Context value
   const contextValue: SecurityContextType = {

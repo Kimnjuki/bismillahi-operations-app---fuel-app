@@ -30,21 +30,12 @@ class InternalAccountService {
     try {
       const { data, error } = await supabase
         .from('internal_accounts')
-        .select(`
-          *,
-          stations (
-            id,
-            station_name,
-            station_code,
-            location
-          )
-        `)
+        .select('*')
         .eq('is_active', true)
         .order('account_name', { ascending: true });
 
       if (error) {
         console.log('Supabase error fetching accounts:', error.message);
-        // Return empty array with error logged - no sample data masking
         return {
           data: null,
           error: error.message,
@@ -72,15 +63,7 @@ class InternalAccountService {
     try {
       const { data, error } = await supabase
         .from('internal_accounts')
-        .select(`
-          *,
-          stations (
-            id,
-            station_name,
-            station_code,
-            location
-          )
-        `)
+        .select('*')
         .eq('station_id', stationId)
         .eq('is_active', true)
         .order('account_name', { ascending: true });

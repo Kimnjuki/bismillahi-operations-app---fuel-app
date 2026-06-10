@@ -1,0 +1,70 @@
+const { createClient } = require('@supabase/supabase-js');
+
+const supabase = createClient(
+  'https://bdjoknphffficrepbxim.supabase.co',
+  'sb_publishable_XUvsC3aQUTpITX64S3yrNw_q4DnyqBf'
+);
+
+async function main() {
+  console.log('=== Checking account_receivables ===\n');
+
+  // Check what columns exist by trying a minimal insert
+  const { error: insertErr1 } = await supabase.rpc('exec_sql', {
+    sql: `INSERT INTO public.account_receivables (total_amount, currency, due_date, status, description, creditor_name, creditor_code) VALUES (100, 'CDF', '2026-12-01', 'pending', 'test', 'Test', 'TEST001')`
+  });
+  console.log('Minimal insert:', insertErr1 ? insertErr1.message : 'OK');
+
+  // Check via REST
+  const { data: data1 } = await supabase.from('account_receivables').select('*').limit(5);
+  console.log('REST read:', data1?.length || 0, 'rows');
+  if (data1 && data1.length > 0) {
+    console.log('Columns:', Object.keys(data1[0]).join(', '));
+  }
+
+  console.log('\n=== Checking account_payables ===\n');
+  const { error: insertErr2 } = await supabase.rpc('exec_sql', {
+    sql: `INSERT INTO public.account_payables (total_amount, currency, due_date, status, description, debtor_name, debtor_code) VALUES (100, 'CDF', '2026-12-01', 'pending', 'test', 'Test', 'TEST001')`
+  });
+  console.log('Minimal insert:', insertErr2 ? insertErr2.message : 'OK');
+
+  const { data: data2 } = await supabase.from('account_payables').select('*').limit(5);
+  console.log('REST read:', data2?.length || 0, 'rows');
+  if (data2 && data2.length > 0) {
+    console.log('Columns:', Object.keys(data2[0]).join(', '));
+  }
+
+  // Now insert all the real data
+  console.log('\n=== Seeding real data ===\n');
+
+  const arData = [
+    { creditor_name: 'Congo Fuel Supply Ltd', creditor_code: 'CFS001', total_amount: 5000000, currency: 'CDF', due_date: '2026-07-15', status: 'pending', description: 'Fuel supply payment' },
+    { creditor_name: 'Kinshasa Equipment Co', creditor_code: 'KEC002', total_amount: 2500, currency: 'USD', due_date: '2026-07-20', status: 'overdue', description: 'Equipment maintenance' },
+    { creditor_name: 'Issiro General Suppliers', creditor_code: 'IGS003', total_amount: 3000000, currency: 'CDF', due_date: '2026-08-01', status: 'pending', description: 'Station supplies' },
+  ];
+
+  // Remove test data first
+  await supabase.rpc('exec_sql', { sql: `DELETE FROM public.account_receivables WHERE creditor_code = 'TEST001'` });
+
+  const { error: arErr } = await supabase.from('account_receivables').insert(arData);
+  console.log('account_receivables:', arErr ? arErr.message : `${arData.length} rows inserted`);
+
+  const apData = [
+    { debtor_name: 'Rungu Transport Services', debtor_code: 'RTS001', total_amount: 2000000, currency: 'CDF', due_date: '2026-07-18', status: 'pending', description: 'Fuel delivery payment' },
+    { debtor_name: 'Dungu Petroleum Dealers', debtor_code: 'DPD002', total_amount: 1500, currency: 'USD', due_date: '2026-07-22', status: 'overdue', description: 'Service charges' },
+  ];
+
+  await supabase.rpc('exec_sql', { sql: `DELETE FROM public.account_payables WHERE debtor_code = 'TEST001'` });
+
+  const { error: apErr } = await supabase.from('account_payables').insert(apData);
+  console.log('account_payables:', apErr ? apErr.message : `${apData.length} rows inserted`);
+
+  // Final verification
+  console.log('\n=== Final Counts ===');
+  const tables = ['users', 'stations', 'account_receivables', 'account_payables', 'expenses', 'fund_transfers', 'exchange_rates', 'internal_accounts', 'pump_sales', 'drum_sales'];
+  for (const t of tables) {
+    const { count } = await supabase.from(t).select('*', { count: 'exact', head: true });
+    console.log(`  ${t}: ${count || 0} rows`);
+  }
+}
+
+main().catch(console.error);
