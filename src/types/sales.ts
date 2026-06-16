@@ -14,6 +14,7 @@ export interface PumpSale extends SaleBase {
   fuel_type: FuelType;
   volume_liters: number;
   price_per_liter: number;
+  pump_attendant?: string; // Added: track which attendant handled this pump
 }
 
 // Drum sale types
@@ -30,6 +31,7 @@ export interface PumpSaleForm {
   volumeLiters: string;
   pricePerLiter: string;
   paymentMethod: PaymentMethod;
+  pumpAttendant?: string; // Added
 }
 
 export interface DrumSaleForm {
@@ -60,6 +62,7 @@ export interface SalesStats {
   salesByFuel: Record<FuelType, number>;
   salesByPayment: Record<PaymentMethod, number>;
   salesByPump: Record<number, number>;
+  salesByPumpAttendant: Record<string, number>; // Added: per-attendant totals
   salesByDrum: Record<DrumType, number>;
 }
 
@@ -88,6 +91,7 @@ export interface SalesFilters {
   drumTypes?: DrumType[];
   paymentMethods?: PaymentMethod[];
   pumpNumbers?: number[];
+  pumpAttendants?: string[]; // Added
   createdBy?: string[];
 }
 
@@ -102,6 +106,7 @@ export interface SalesReport {
   salesByFuel: Record<FuelType, number>;
   salesByPayment: Record<PaymentMethod, number>;
   topPumps: Array<{ pumpNumber: number; sales: number }>;
+  topPumpAttendants: Array<{ attendant: string; sales: number }>; // Added
   topDrums: Array<{ drumType: DrumType; sales: number }>;
 }
 
@@ -137,7 +142,7 @@ export const PUMP_SALE_VALIDATION = {
   },
   fuelType: {
     required: true,
-    options: ['Petrol', 'Diesel', 'Kerosene', 'Gas'],
+     options: ['PMS', 'AGO'],
     message: 'Please select a valid fuel type',
   },
   volumeLiters: {
@@ -222,18 +227,19 @@ export const isDrumSaleForm = (form: any): form is DrumSaleForm => {
 };
 
 // Sales constants
-export const FUEL_TYPES: FuelType[] = ['Petrol', 'Diesel', 'Kerosene', 'Gas'];
+export const FUEL_TYPES: FuelType[] = ['PMS', 'AGO'];
 export const DRUM_TYPES: DrumType[] = ['200L Drum', '100L Drum', '50L Drum', '25L Jerrycan'];
 export const PAYMENT_METHODS: PaymentMethod[] = ['cash', 'card', 'credit'];
 
 export const PUMP_NUMBERS = Array.from({ length: 20 }, (_, i) => i + 1);
 
 export const DEFAULT_PUMP_SALE_FORM: PumpSaleForm = {
-  pumpNumber: '',
-  fuelType: 'Petrol',
-  volumeLiters: '',
-  pricePerLiter: '',
-  paymentMethod: 'cash',
+   pumpNumber: '',
+   fuelType: 'PMS',
+   volumeLiters: '',
+   pricePerLiter: '',
+   paymentMethod: 'cash',
+   pumpAttendant: '',
 };
 
 export const DEFAULT_DRUM_SALE_FORM: DrumSaleForm = {
@@ -243,3 +249,62 @@ export const DEFAULT_DRUM_SALE_FORM: DrumSaleForm = {
   paymentMethod: 'cash',
 };
 
+// Sales batch types
+export interface BatchPumpSale {
+  station: string;
+  customer: string;
+  payment: PaymentMethod;
+  refNo: string;
+  date: string;
+  pumpNumber: string;
+  fuelType: FuelType;
+  volumeLiters: string;
+  pricePerLiter: string;
+  pumpAttendant: string; // Added: track which pump attendant
+}
+
+export interface BatchDrumSale {
+  station: string;
+  customer: string;
+  payment: PaymentMethod;
+  refNo: string;
+  date: string;
+  drumType: DrumType;
+  quantity: string;
+  pricePerDrum: string;
+}
+
+export type BatchSale = BatchPumpSale | BatchDrumSale;
+
+// Per-attendant sales summary
+export interface PumpAttendantSummary {
+  attendant: string;
+  pumpNumber: string;
+  fuelType: FuelType;
+  volumeLiters: number;
+  totalAmount: number;
+}
+
+export const DEFAULT_BATCH_PUMP_SALE: BatchPumpSale = {
+   station: 'ISSIRO STATION',
+   customer: 'Walk-in Custom',
+   payment: 'cash',
+   refNo: '',
+   date: '',
+   pumpNumber: '',
+   fuelType: 'PMS',
+   volumeLiters: '',
+   pricePerLiter: '',
+   pumpAttendant: '',
+};
+
+export const DEFAULT_BATCH_DRUM_SALE: BatchDrumSale = {
+  station: 'ISSIRO STATION',
+  customer: 'Walk-in Custom',
+  payment: 'cash',
+  refNo: '',
+  date: '',
+  drumType: '200L Drum',
+  quantity: '',
+  pricePerDrum: '',
+};

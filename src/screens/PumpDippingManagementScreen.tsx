@@ -10,6 +10,7 @@ import {
   Modal,
   TextInput,
   RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,7 +18,20 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { stationService } from '../services/stationService';
 import { tankService } from '../services/tankService';
-import { Station, Tank } from '../types';
+import { pumpReadingService } from '../services/pumpReadingService';
+import { Station, Tank, PumpFuelType } from '../types';
+
+interface TankDippingInput {
+  tankId: string;
+  tankName: string;
+  fuelType: PumpFuelType;
+  capacity: number;
+  previousDip: string;
+  currentDip: string;
+  offload: string;
+  variance: number;
+  pumps: string[];
+}
 
 export default function PumpDippingManagementScreen() {
   const { appUser } = useAuth();
@@ -25,62 +39,59 @@ export default function PumpDippingManagementScreen() {
   const [stations, setStations] = useState<Station[]>([]);
   const [selectedStation, setSelectedStation] = useState<Station | null>(null);
   const [tanks, setTanks] = useState<Tank[]>([]);
-  const [dippingReadings, setDippingReadings] = useState<{ [tankId: string]: string }>({});
+  const [tankDippings, setTankDippings] = useState<{ [tankId: string]: TankDippingInput }>({});
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [showStationPicker, setShowStationPicker] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [readingDate, setReadingDate] = useState(new Date().toISOString().split('T')[0]);
 
-  // Sample data
-  const sampleStations: Station[] = [
-    {
-      id: '1',
-      name: 'ISSIRO STATION',
-      code: 'ISS001',
-      station_name: 'ISSIRO STATION',
-      station_code: 'ISS001',
-      location: 'Issiro, DRC',
-      system_type: 'pump',
-      usd_support: true,
-      is_active: true,
-      created_by: appUser?.id || '',
-      created_at: new Date().toISOString(),
-      capacity_liters: 10000,
-      current_stock: 7500,
-    },
-  ];
+  // Derived: is this a drum station? (DEPOT ISSIRO)
+  const isDrumStation = selectedStation?.system_type === 'drum' || selectedStation?.name?.toLowerCase().includes('issiro');
 
-  const sampleTanks: Tank[] = [
-    {
-      id: '1',
-      name: 'Tank 1',
-      tank_number: 1,
-      fuel_type: 'PMS',
-      station_id: '1',
-      capacity: 10000,
-      current_dipping: 5020,
-      closing_book_stock: 5000,
-      variance: 20,
-      pumps: ['1', '3'],
-      is_active: true,
-      created_by: appUser?.id || '',
-      created_at: new Date().toISOString(),
-    },
-    {
-      id: '2',
-      name: 'Tank 2',
-      tank_number: 2,
-      fuel_type: 'AGO',
-      station_id: '1',
-      capacity: 10000,
-      current_dipping: 4985,
-      closing_book_stock: 5000,
-      variance: -15,
-      pumps: ['2', '4'],
-      is_active: true,
-      created_by: appUser?.id || '',
-      created_at: new Date().toISOString(),
-    },
-  ];
+  const getFuelTypeColor = (fuelType: string) => {
+    switch (fuelType) {
+      case 'PMS': return '#FF6B35';
+      case 'AGO': return '#4CAF50';
+      default: return '#F0C38E';
+    }
+  };
+
+  const getVarianceColor = (variance: number) => {
+    if (Math.abs(variance) < 0.5) return '#4CAF50';
+    if (variance > 0) return '#4CAF50';
+    if (variance < 0) return '#F44336';
+    return '#F0C38E';
+  };
+
+  // Calculate dip consumption for a fuel type: sum of (previousDip + offload - currentDip) for all tanks
+  const getDipConsumptionByFuelType = (fuelType: PumpFuelType): number => {
+    const fuelTanks = tanks.filter(t => t.fuel_type === fuelType);
+    let totalConsumption = 0;
+    for (const tank of fuelTanks) {
+      const dip = tankDippings[tank.id];
+      if (dip) {
+        const prev = parseFloat(dip.previousDip) || 0;
+        const curr = parseFloat(dip.currentDip) || 0;
+        const offload = parseFloat(dip.offload) || 0;
+        totalConsumption += prev + offload - curr;
+      }
+    }
+    return totalConsumption;
+  };
+
+  // Validate dip vs expected (for pump stations, dip should match sales)
+  const validateDipVsSales = (fuelType: PumpFuelType): { valid: boolean; dipConsumption: number; message: string } => {
+    const dipConsumption = getDipConsumptionByFuelType(fuelType);
+    const valid = dipConsumption >= 0;
+    return {
+      valid,
+      dipConsumption,
+      message: valid
+        ? `✓ ${fuelType}: Dip consumption ${dipConsumption.toFixed(2)}L — OK`
+        : `✗ ${fuelType}: Negative dip consumption (${dipConsumption.toFixed(2)}L). Current dip cannot exceed previous dip + offload.`,
+    };
+  };
 
   const loadStations = useCallback(async () => {
     try {
@@ -90,20 +101,11 @@ export default function PumpDippingManagementScreen() {
         if (response.data.length > 0 && !selectedStation) {
           setSelectedStation(response.data[0]);
         }
-      } else {
-        setStations(sampleStations);
-        if (!selectedStation) {
-          setSelectedStation(sampleStations[0]);
-        }
       }
     } catch (error) {
       console.error('Error loading stations:', error);
-      setStations(sampleStations);
-      if (!selectedStation) {
-        setSelectedStation(sampleStations[0]);
-      }
     }
-  }, [sampleStations, selectedStation]);
+  }, [selectedStation]);
 
   const loadTanks = useCallback(async () => {
     if (!selectedStation) return;
@@ -111,84 +113,110 @@ export default function PumpDippingManagementScreen() {
     try {
       setLoading(true);
       const response = await tankService.getTanksByStation(selectedStation.id);
-      if (response.success && response.data) {
-        setTanks(response.data);
-        // Initialize dipping readings with current values
-        const readings: { [tankId: string]: string } = {};
-        response.data.forEach(tank => {
-          readings[tank.id] = tank.current_dipping.toString();
-        });
-        setDippingReadings(readings);
-      } else {
-        setTanks(sampleTanks);
-        const readings: { [tankId: string]: string } = {};
-        sampleTanks.forEach(tank => {
-          readings[tank.id] = tank.current_dipping.toString();
-        });
-        setDippingReadings(readings);
+      const loadedTanks: Tank[] = (response.success && response.data)
+        ? response.data
+        : [];
+
+      // Build tank dipping inputs with previous/current dip
+      const dippingMap: { [tankId: string]: TankDippingInput } = {};
+      for (const tank of loadedTanks) {
+        dippingMap[tank.id] = {
+          tankId: tank.id,
+          tankName: tank.name,
+          fuelType: tank.fuel_type,
+          capacity: tank.capacity,
+          previousDip: tank.closing_book_stock.toString(),
+          currentDip: tank.current_dipping.toString(),
+          offload: '0',
+          variance: tank.variance,
+          pumps: tank.pumps,
+        };
       }
+
+      // Batch all state updates at once to prevent flickering
+      setTanks(loadedTanks);
+      setTankDippings(dippingMap);
+      setLoading(false);
+      setRefreshing(false);
     } catch (error) {
       console.error('Error loading tanks:', error);
-      setTanks(sampleTanks);
-      const readings: { [tankId: string]: string } = {};
-      sampleTanks.forEach(tank => {
-        readings[tank.id] = tank.current_dipping.toString();
-      });
-      setDippingReadings(readings);
-    } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [selectedStation, sampleTanks]);
+  }, [selectedStation]);
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    loadTanks();
-  }, [loadTanks]);
+  const handleTankDippingChange = (tankId: string, field: keyof TankDippingInput, value: string) => {
+    const updated = { ...tankDippings };
+    if (updated[tankId]) {
+      updated[tankId] = { ...updated[tankId], [field]: value };
+      const currentDip = parseFloat(field === 'currentDip' ? value : updated[tankId].currentDip) || 0;
+      const previousDip = parseFloat(field === 'previousDip' ? value : updated[tankId].previousDip) || 0;
+      updated[tankId].variance = currentDip - previousDip;
+    }
+    setTankDippings(updated);
+  };
 
   const handleSaveDippingReadings = async () => {
-    if (!appUser || appUser.role !== 'admin') {
-      Alert.alert('Access Denied', 'Only administrators can save dipping readings');
+    if (!appUser) {
+      Alert.alert('Error', 'User not authenticated');
       return;
     }
 
     // Validate all readings
-    const readings: { tankId: string; dippingReading: number }[] = [];
-    for (const tank of tanks) {
-      const reading = dippingReadings[tank.id];
-      if (!reading || reading.trim() === '') {
-        Alert.alert('Error', `Please enter dipping reading for ${tank.name}`);
+    for (const dip of Object.values(tankDippings)) {
+      const current = parseFloat(dip.currentDip);
+      const previous = parseFloat(dip.previousDip);
+      const offload = parseFloat(dip.offload);
+      if (isNaN(current) || current < 0) {
+        Alert.alert('Input Error', `Please enter a valid current dip for ${dip.tankName}`);
         return;
       }
-      const value = parseFloat(reading);
-      if (isNaN(value) || value < 0) {
-        Alert.alert('Error', `Please enter a valid dipping reading for ${tank.name}`);
+      if (isNaN(previous) || previous < 0) {
+        Alert.alert('Input Error', `Please enter a valid previous dip for ${dip.tankName}`);
         return;
       }
-      readings.push({ tankId: tank.id, dippingReading: value });
+      if (isNaN(offload) || offload < 0) {
+        Alert.alert('Input Error', `Please enter a valid offload amount for ${dip.tankName}`);
+        return;
+      }
+    }
+
+    // Validate dip consumption is not negative for each fuel type
+    const fuelTypes: PumpFuelType[] = ['PMS', 'AGO'];
+    const negativeConsumptions: string[] = [];
+    for (const fuelType of fuelTypes) {
+      const result = validateDipVsSales(fuelType);
+      if (!result.valid) {
+        negativeConsumptions.push(result.message);
+      }
+    }
+
+    if (negativeConsumptions.length > 0) {
+      Alert.alert(
+        'Invalid Dip Readings',
+        'The following issues were found:\n\n' + negativeConsumptions.join('\n\n') +
+        '\n\nPlease correct the readings before saving.',
+        [{ text: 'OK' }]
+      );
+      return;
     }
 
     try {
-      setLoading(true);
+      setSaving(true);
+      const readings = Object.values(tankDippings).map(d => ({
+        tankId: d.tankId,
+        dippingReading: parseFloat(d.currentDip) || 0,
+      }));
+
       const response = await tankService.updateDippingReadings(readings, appUser.id);
-      
       if (response.success) {
-        // Update local tank data with new readings
-        const updatedTanks = tanks.map(tank => {
-          const reading = readings.find(r => r.tankId === tank.id);
-          if (reading) {
-            const variance = reading.dippingReading - tank.closing_book_stock;
-            return {
-              ...tank,
-              current_dipping: reading.dippingReading,
-              variance: variance,
-            };
-          }
-          return tank;
-        });
-        setTanks(updatedTanks);
-        
-        Alert.alert('Success', 'Dipping readings saved successfully');
+        // Show validation summary after save
+        const summary = fuelTypes
+          .map(ft => validateDipVsSales(ft))
+          .map(r => r.message)
+          .join('\n');
+
+        Alert.alert('Success', 'Dipping readings saved successfully!\n\n' + summary);
       } else {
         Alert.alert('Error', response.error || 'Failed to save dipping readings');
       }
@@ -196,7 +224,7 @@ export default function PumpDippingManagementScreen() {
       console.error('Error saving dipping readings:', error);
       Alert.alert('Error', 'Failed to save dipping readings');
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
@@ -205,24 +233,13 @@ export default function PumpDippingManagementScreen() {
       Alert.alert('Error', 'Please select a station first');
       return;
     }
-
-    if (!appUser || appUser.role !== 'admin') {
-      Alert.alert('Access Denied', 'Only administrators can add tanks');
-      return;
-    }
-
     (navigation as any).navigate('AddTank', { stationId: selectedStation.id });
   };
 
   const handleEditTank = (tank: Tank) => {
-    if (!appUser || appUser.role !== 'admin') {
-      Alert.alert('Access Denied', 'Only administrators can edit tanks');
-      return;
-    }
-
-    (navigation as any).navigate('AddTank', { 
-      stationId: selectedStation?.id || '', 
-      tank: tank 
+    (navigation as any).navigate('AddTank', {
+      stationId: selectedStation?.id || '',
+      tank: tank,
     });
   };
 
@@ -253,161 +270,267 @@ export default function PumpDippingManagementScreen() {
               console.error('Error deleting tank:', error);
               Alert.alert('Error', 'Failed to delete tank');
             }
-          }
-        }
+          },
+        },
       ]
     );
   };
 
-  const getFuelTypeColor = (fuelType: string) => {
-    switch (fuelType) {
-      case 'PMS':
-        return '#FF6B35';
-      case 'AGO':
-        return '#4CAF50';
-      case 'DPK':
-        return '#2196F3';
-      case 'LPG':
-        return '#FF9800';
-      default:
-        return '#F0C38E';
-    }
-  };
-
-  const getVarianceColor = (variance: number) => {
-    if (variance > 0) return '#4CAF50'; // Green for positive
-    if (variance < 0) return '#F44336'; // Red for negative
-    return '#F0C38E'; // Neutral for zero
-  };
-
-  const formatVariance = (variance: number) => {
-    const sign = variance >= 0 ? '+' : '';
-    return `${sign}${variance} Liters`;
-  };
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadTanks();
+  }, [loadTanks]);
 
   useEffect(() => {
     loadStations();
   }, [loadStations]);
 
   useEffect(() => {
-    loadTanks();
-  }, [loadTanks]);
+    if (selectedStation) {
+      loadTanks();
+    }
+  }, [selectedStation, loadTanks]);
 
   return (
     <LinearGradient colors={['#312C51', '#48426D']} style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <ScrollView 
-          style={styles.content} 
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-        >
-          {/* Header */}
-          <View style={styles.header}>
-            <TouchableOpacity onPress={() => navigation.goBack()}>
-              <Ionicons name="arrow-back" size={24} color="#ffffff" />
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>BISMILLAHI Pump Management</Text>
-            <View style={styles.headerSpacer} />
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={24} color="#ffffff" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>
+            {isDrumStation ? 'Dip Reading (Drum Sales)' : 'Tank Dipping'}
+          </Text>
+          <View style={styles.headerSpacer} />
+        </View>
+
+        {/* Station Type Badge */}
+        <View style={styles.stationTypeBadge}>
+          <View style={[styles.badgeDot, {
+            backgroundColor: isDrumStation ? '#FF9800' : '#4CAF50'
+          }]} />
+          <Text style={styles.stationTypeText}>
+            {selectedStation?.name || 'Select Station'}
+            {' — '}
+            {isDrumStation ? 'Drum Sales (Dip Only)' : 'Pump System'}
+          </Text>
+        </View>
+
+        {/* Station Selector */}
+        <View style={styles.stationSelector}>
+          <TouchableOpacity
+            style={styles.stationButton}
+            onPress={() => setShowStationPicker(true)}
+          >
+            <Text style={styles.stationButtonText}>
+              {selectedStation ? selectedStation.name : 'Select Station'}
+            </Text>
+            <Text style={styles.stationDateText}>Date: {readingDate}</Text>
+            <Ionicons name="swap-vertical" size={20} color="#F0C38E" />
+          </TouchableOpacity>
+        </View>
+
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#F0C38E" />
+            <Text style={styles.loadingText}>Loading tank data...</Text>
           </View>
-
-          {/* Station Selector */}
-          <View style={styles.stationSelector}>
-            <TouchableOpacity 
-              style={styles.stationButton}
-              onPress={() => setShowStationPicker(true)}
-            >
-              <Text style={styles.stationButtonText}>
-                {selectedStation ? selectedStation.name : 'Select Station'}
-              </Text>
-              <Ionicons name="swap-vertical" size={20} color="#F0C38E" />
-            </TouchableOpacity>
-          </View>
-
-          {/* Tanks List */}
-          <View style={styles.tanksList}>
-            {tanks.map((tank) => (
-              <View key={tank.id} style={styles.tankCard}>
-                {/* Tank Header */}
-                <View style={styles.tankHeader}>
-                  <View style={styles.tankInfo}>
-                    <Text style={styles.tankName}>{tank.name} ({tank.fuel_type})</Text>
-                    <Text style={[styles.pumpsInfo, { color: getFuelTypeColor(tank.fuel_type) }]}>
-                      Pumps: {tank.pumps.join(', ')}
-                    </Text>
-                  </View>
-                  <View style={styles.tankActions}>
-                    <TouchableOpacity 
-                      style={styles.actionButton}
-                      onPress={() => handleEditTank(tank)}
-                    >
-                      <Ionicons name="pencil" size={20} color="#F0C38E" />
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={styles.actionButton}
-                      onPress={() => handleDeleteTank(tank)}
-                    >
-                      <Ionicons name="trash" size={20} color="#F0C38E" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                {/* Current Dipping Reading */}
-                <View style={styles.dippingSection}>
-                  <Text style={styles.dippingLabel}>Current Dipping Reading (Liters)</Text>
-                  <TextInput
-                    style={styles.dippingInput}
-                    value={dippingReadings[tank.id] || ''}
-                    onChangeText={(text) => setDippingReadings(prev => ({
-                      ...prev,
-                      [tank.id]: text
-                    }))}
-                    placeholder="e.g., 5020"
-                    placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                    keyboardType="numeric"
-                  />
-                </View>
-
-                {/* Stock Information */}
-                <View style={styles.stockInfo}>
-                  <View style={styles.stockRow}>
-                    <Text style={styles.stockLabel}>Closing Book Stock:</Text>
-                    <Text style={styles.stockValue}>{tank.closing_book_stock} Liters</Text>
-                  </View>
-                  <View style={styles.stockRow}>
-                    <Text style={styles.stockLabel}>Variance:</Text>
-                    <Text style={[styles.varianceValue, { color: getVarianceColor(tank.variance) }]}>
-                      {formatVariance(tank.variance)}
-                    </Text>
-                  </View>
-                </View>
+        ) : (
+          <ScrollView
+            style={styles.content}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+          >
+            {/* Date and Offload Info */}
+            <View style={styles.dateRow}>
+              <View style={styles.dateField}>
+                <Text style={styles.fieldLabel}>Reading Date</Text>
+                <TextInput
+                  style={styles.readingInput}
+                  value={readingDate}
+                  onChangeText={setReadingDate}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor="rgba(255,255,255,0.3)"
+                />
               </View>
-            ))}
-          </View>
+            </View>
 
-          {/* Action Buttons */}
-          <View style={styles.actionButtons}>
-            <TouchableOpacity 
-              style={[styles.saveButton, loading && styles.saveButtonDisabled]} 
-              onPress={handleSaveDippingReadings}
-              disabled={loading}
-            >
-              <Ionicons name="save" size={20} color="#ffffff" />
-              <Text style={styles.saveButtonText}>
-                {loading ? 'Saving...' : 'Save Dipping Readings'}
+            {/* Info Banner */}
+            <View style={styles.infoBanner}>
+              <Ionicons name="information-circle" size={18} color="#F0C38E" />
+              <Text style={styles.infoBannerText}>
+                Enter the previous day's closing dip and today's current dip.
+                {'\n'}Consumption = Previous Dip + Offload - Current Dip
+                {'\n'}This should match the fuel type sold for the day.
               </Text>
-            </TouchableOpacity>
+            </View>
 
-            <TouchableOpacity 
-              style={styles.addButton}
-              onPress={handleAddTank}
-            >
-              <Ionicons name="add" size={20} color="#ffffff" />
-              <Text style={styles.addButtonText}>Add New Pump/Tank</Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
+            {/* Tanks List */}
+            <View style={styles.tanksList}>
+              {(['PMS', 'AGO'] as PumpFuelType[]).map(fuelType => {
+                const fuelTanks = tanks.filter(t => t.fuel_type === fuelType);
+                if (fuelTanks.length === 0) return null;
+
+                const dipConsumption = getDipConsumptionByFuelType(fuelType);
+                const dipValid = dipConsumption >= 0;
+
+                return (
+                  <View key={fuelType} style={styles.fuelTypeSection}>
+                    {/* Fuel Type Header */}
+                    <View style={[styles.fuelTypeHeader, { backgroundColor: getFuelTypeColor(fuelType) + '33' }]}>
+                      <Ionicons name="flame" size={18} color={getFuelTypeColor(fuelType)} />
+                      <Text style={[styles.fuelTypeTitle, { color: getFuelTypeColor(fuelType) }]}>
+                        {fuelType === 'PMS' ? 'PMS Tanks' : 'AGO Tanks'}
+                      </Text>
+                    </View>
+
+                    {/* Dip Consumption Validation Banner */}
+                    <View style={[styles.validationBanner, {
+                      backgroundColor: dipValid ? 'rgba(76,175,80,0.15)' : 'rgba(244,67,54,0.15)',
+                      marginBottom: 12,
+                    }]}>
+                      <Ionicons
+                        name={dipValid ? 'checkmark-circle' : 'warning'}
+                        size={18}
+                        color={dipValid ? '#4CAF50' : '#F44336'}
+                      />
+                      <Text style={[styles.validationBannerText, { color: dipValid ? '#4CAF50' : '#F44336' }]}>
+                        {dipValid
+                          ? `Dip Consumption: ${dipConsumption.toFixed(2)}L — Valid`
+                          : `ERROR: Negative consumption (${dipConsumption.toFixed(2)}L). Current dip exceeds previous + offload.`
+                        }
+                        {'\n'}(This should equal fuel type sold for the day)
+                      </Text>
+                    </View>
+
+                    {/* Tank Cards */}
+                    {fuelTanks.map(tank => {
+                      const dip = tankDippings[tank.id];
+                      if (!dip) return null;
+
+                      const prev = parseFloat(dip.previousDip) || 0;
+                      const curr = parseFloat(dip.currentDip) || 0;
+                      const offload = parseFloat(dip.offload) || 0;
+                      const consumption = prev + offload - curr;
+
+                      return (
+                        <View key={tank.id} style={styles.tankCard}>
+                          <View style={styles.tankCardHeader}>
+                            <View style={styles.tankHeaderRow}>
+                              <Text style={styles.tankName}>{tank.name}</Text>
+                              <View style={styles.tankActions}>
+                                <TouchableOpacity onPress={() => handleEditTank(tank)}>
+                                  <Ionicons name="pencil" size={18} color="#F0C38E" />
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => handleDeleteTank(tank)}>
+                                  <Ionicons name="trash" size={18} color="#F0C38E" />
+                                </TouchableOpacity>
+                              </View>
+                            </View>
+                            <Text style={[styles.tankCapacity, { color: getFuelTypeColor(tank.fuel_type) }]}>
+                              Capacity: {tank.capacity.toLocaleString()} L | Pumps: {tank.pumps.length}
+                            </Text>
+                          </View>
+
+                          <View style={styles.dippingRow}>
+                            <View style={styles.dippingField}>
+                              <Text style={styles.fieldLabel}>Previous Dip (L)</Text>
+                              <TextInput
+                                style={styles.readingInput}
+                                value={dip.previousDip}
+                                onChangeText={(val) => handleTankDippingChange(tank.id, 'previousDip', val)}
+                                keyboardType="numeric"
+                                placeholderTextColor="rgba(255,255,255,0.3)"
+                                placeholder="0"
+                              />
+                            </View>
+                            <View style={styles.dippingField}>
+                              <Text style={styles.fieldLabel}>Current Dip (L)</Text>
+                              <TextInput
+                                style={styles.readingInput}
+                                value={dip.currentDip}
+                                onChangeText={(val) => handleTankDippingChange(tank.id, 'currentDip', val)}
+                                keyboardType="numeric"
+                                placeholderTextColor="rgba(255,255,255,0.3)"
+                                placeholder="0"
+                              />
+                            </View>
+                          </View>
+
+                          <View style={styles.offloadRow}>
+                            <Text style={styles.fieldLabel}>Fuel Offloaded Today (Liters)</Text>
+                            <TextInput
+                              style={[styles.readingInput, styles.offloadInput]}
+                              value={dip.offload}
+                              onChangeText={(val) => handleTankDippingChange(tank.id, 'offload', val)}
+                              keyboardType="numeric"
+                              placeholderTextColor="rgba(255,255,255,0.3)"
+                              placeholder="0"
+                            />
+                          </View>
+
+                          {/* RESULT: Consumption Calculation */}
+                          <View style={[styles.dippingResult, {
+                            borderColor: consumption >= 0 ? 'rgba(76,175,80,0.5)' : 'rgba(244,67,54,0.5)',
+                            borderWidth: 1,
+                          }]}>
+                            <View style={styles.resultRow}>
+                              <Text style={styles.fieldLabel}>Consumption (Prev+Offload-Current):</Text>
+                              <Text style={[styles.resultValue, { 
+                                color: consumption >= 0 ? '#4CAF50' : '#F44336',
+                                fontWeight: 'bold',
+                              }]}>
+                                {consumption.toFixed(2)} L
+                              </Text>
+                            </View>
+                            <View style={styles.resultRow}>
+                              <Text style={styles.fieldLabel}>Dip Variance:</Text>
+                              <Text style={[styles.resultValue, { color: getVarianceColor(dip.variance) }]}>
+                                {dip.variance >= 0 ? '+' : ''}{dip.variance.toFixed(2)} L
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                );
+              })}
+            </View>
+
+            {tanks.length === 0 && (
+              <View style={styles.emptyState}>
+                <Ionicons name="alert-circle" size={40} color="#F0C38E" />
+                <Text style={styles.emptyText}>No tanks found for this station</Text>
+              </View>
+            )}
+
+            {/* Action Buttons */}
+            <View style={styles.actionButtons}>
+              <TouchableOpacity
+                style={[styles.saveButton, saving && styles.saveButtonDisabled]}
+                onPress={handleSaveDippingReadings}
+                disabled={saving}
+              >
+                <Ionicons name={saving ? 'hourglass' : 'save'} size={20} color="#ffffff" />
+                <Text style={styles.saveButtonText}>
+                  {saving ? 'Saving...' : 'Save Dip Readings'}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.addButton}
+                onPress={handleAddTank}
+              >
+                <Ionicons name="add" size={20} color="#F0C38E" />
+                <Text style={styles.addButtonText}>Add Tank</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        )}
 
         {/* Station Picker Modal */}
         <Modal
@@ -424,19 +547,36 @@ export default function PumpDippingManagementScreen() {
                   key={station.id}
                   style={[
                     styles.modalOption,
-                    selectedStation?.id === station.id && styles.modalOptionSelected
+                    selectedStation?.id === station.id && styles.modalOptionSelected,
                   ]}
                   onPress={() => {
                     setSelectedStation(station);
                     setShowStationPicker(false);
                   }}
                 >
-                  <Text style={[
-                    styles.modalOptionText,
-                    selectedStation?.id === station.id && styles.modalOptionTextSelected
-                  ]}>
-                    {station.name}
-                  </Text>
+                  <View style={styles.modalOptionRow}>
+                    <Text
+                      style={[
+                        styles.modalOptionText,
+                        selectedStation?.id === station.id && styles.modalOptionTextSelected,
+                      ]}
+                    >
+                      {station.name}
+                    </Text>
+                    <View
+                      style={[
+                        styles.badgeSmall,
+                        {
+                          backgroundColor:
+                            station.system_type === 'drum' ? '#FF9800' : '#4CAF50',
+                        },
+                      ]}
+                    >
+                      <Text style={styles.badgeSmallText}>
+                        {station.system_type === 'drum' ? 'DRUM' : 'PUMP'}
+                      </Text>
+                    </View>
+                  </View>
                   <Text style={styles.modalOptionSubtext}>
                     {station.code} - {station.location}
                   </Text>
@@ -457,40 +597,44 @@ export default function PumpDippingManagementScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  safeArea: {
-    flex: 1,
-  },
-  content: {
-    flex: 1,
-  },
+  container: { flex: 1 },
+  safeArea: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingVertical: 12,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#ffffff',
     flex: 1,
     textAlign: 'center',
   },
-  headerSpacer: {
-    width: 24,
+  headerSpacer: { width: 24 },
+  stationTypeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    marginBottom: 8,
+    gap: 6,
+  },
+  badgeDot: { width: 8, height: 8, borderRadius: 4 },
+  stationTypeText: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontStyle: 'italic',
   },
   stationSelector: {
     paddingHorizontal: 16,
-    marginBottom: 24,
+    marginBottom: 8,
   },
   stationButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingVertical: 12,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -500,85 +644,124 @@ const styles = StyleSheet.create({
   stationButtonText: {
     fontSize: 16,
     color: '#ffffff',
-    fontWeight: '500',
-  },
-  tanksList: {
-    paddingHorizontal: 16,
-    marginBottom: 24,
-  },
-  tankCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  tankHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
-  },
-  tankInfo: {
+    fontWeight: '600',
     flex: 1,
   },
-  tankName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#ffffff',
-    marginBottom: 4,
+  stationDateText: {
+    fontSize: 11,
+    color: '#F0C38E',
+    marginRight: 8,
   },
-  pumpsInfo: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  tankActions: {
+  dateRow: {
     flexDirection: 'row',
-    gap: 8,
+    paddingHorizontal: 16,
+    marginBottom: 12,
   },
-  actionButton: {
-    padding: 8,
+  dateField: { flex: 1 },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  dippingSection: {
-    marginBottom: 16,
-  },
-  dippingLabel: {
+  loadingText: {
+    color: '#F0C38E',
+    marginTop: 12,
     fontSize: 14,
-    color: '#ffffff',
-    marginBottom: 8,
   },
-  dippingInput: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  content: { flex: 1 },
+  infoBanner: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(240, 195, 142, 0.1)',
+    padding: 12,
+    marginHorizontal: 16,
     borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: '#ffffff',
+    gap: 8,
+    marginBottom: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: 'rgba(240, 195, 142, 0.3)',
   },
-  stockInfo: {
+  infoBannerText: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.8)',
+    flex: 1,
+    lineHeight: 18,
+  },
+  tanksList: { paddingHorizontal: 16, paddingBottom: 16 },
+  fuelTypeSection: { marginBottom: 20 },
+  fuelTypeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  fuelTypeTitle: { fontSize: 14, fontWeight: 'bold' },
+  validationBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    borderRadius: 8,
     gap: 8,
   },
-  stockRow: {
+  validationBannerText: {
+    fontSize: 12,
+    flex: 1,
+    lineHeight: 16,
+  },
+  tankCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  tankCardHeader: { marginBottom: 12 },
+  tankHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  stockLabel: {
-    fontSize: 14,
+  tankName: { fontSize: 16, fontWeight: 'bold', color: '#ffffff' },
+  tankCapacity: { fontSize: 12, marginTop: 2 },
+  tankActions: { flexDirection: 'row', gap: 12 },
+  dippingRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 12,
+  },
+  dippingField: { flex: 1 },
+  fieldLabel: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.7)',
+    marginBottom: 6,
+  },
+  readingInput: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 15,
     color: '#ffffff',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
-  stockValue: {
-    fontSize: 14,
-    color: '#ffffff',
-    fontWeight: '500',
+  offloadRow: { marginBottom: 12 },
+  offloadInput: { marginTop: 6 },
+  dippingResult: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    padding: 12,
+    borderRadius: 8,
+    gap: 6,
   },
-  varianceValue: {
-    fontSize: 14,
-    fontWeight: 'bold',
+  resultRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
+  resultValue: { fontSize: 14, color: '#ffffff', fontWeight: '600' },
   actionButtons: {
     paddingHorizontal: 16,
     paddingBottom: 32,
@@ -604,16 +787,28 @@ const styles = StyleSheet.create({
   addButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 12,
-    paddingVertical: 16,
+    paddingVertical: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(240, 195, 142, 0.3)',
   },
   addButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#F0C38E',
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    gap: 12,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.7)',
+    textAlign: 'center',
   },
   modalOverlay: {
     flex: 1,
@@ -645,18 +840,31 @@ const styles = StyleSheet.create({
   modalOptionSelected: {
     backgroundColor: 'rgba(240, 195, 142, 0.2)',
   },
+  modalOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   modalOptionText: {
     fontSize: 16,
     color: '#ffffff',
     fontWeight: '500',
   },
-  modalOptionTextSelected: {
-    color: '#F0C38E',
-  },
+  modalOptionTextSelected: { color: '#F0C38E' },
   modalOptionSubtext: {
     fontSize: 14,
     color: 'rgba(255, 255, 255, 0.7)',
     marginTop: 2,
+  },
+  badgeSmall: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  badgeSmallText: {
+    fontSize: 10,
+    color: '#ffffff',
+    fontWeight: 'bold',
   },
   modalCancelButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
@@ -671,6 +879,3 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 });
-
-
-
