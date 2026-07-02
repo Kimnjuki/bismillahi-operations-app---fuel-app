@@ -141,12 +141,10 @@ class PumpService {
 
   // Get fuel type options
   getFuelTypeOptions(): { value: PumpFuelType; label: string; description: string }[] {
-    return [
-      { value: 'PMS', label: 'PMS', description: 'Premium Motor Spirit (Petrol)' },
-      { value: 'AGO', label: 'AGO', description: 'Automotive Gas Oil (Diesel)' },
-      { value: 'DPK', label: 'DPK', description: 'Dual Purpose Kerosene' },
-      { value: 'LPG', label: 'LPG', description: 'Liquefied Petroleum Gas' },
-    ];
+     return [
+       { value: 'PMS', label: 'PMS', description: 'Premium Motor Spirit (PMS)' },
+       { value: 'AGO', label: 'AGO', description: 'Automotive Gas Oil (AGO)' },
+     ];
   }
 
   // Get next pump number for a station

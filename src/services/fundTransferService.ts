@@ -269,7 +269,7 @@ class FundTransferService {
 
        // Add the converted amount to the destination account
        if (toAccountData) {
-         await internalAccountService.updateAccountBalance(toAccountData.id, transfer.converted_amount, 'add');
+          await internalAccountService.updateAccountBalance(toAccountData.id, transfer.converted_amount ?? 0, 'add');
        }
      } catch (error) {
        console.error('Error updating account balances:', error);

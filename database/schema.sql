@@ -17,6 +17,33 @@ CREATE TABLE users (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Stations table
+CREATE TABLE stations (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  station_name VARCHAR(255) NOT NULL,
+  station_code VARCHAR(100) NOT NULL UNIQUE,
+  location VARCHAR(255),
+  is_active BOOLEAN DEFAULT true,
+  created_by UUID REFERENCES users(id)
+);
+
+-- Internal Accounts table
+CREATE TABLE internal_accounts (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  account_name VARCHAR(255) NOT NULL,
+  account_code VARCHAR(100),
+  account_type VARCHAR(50) NOT NULL,
+  station_id UUID REFERENCES stations(id),
+  balance DECIMAL(12,2) DEFAULT 0,
+  currency VARCHAR(3) NOT NULL DEFAULT 'CDF',
+  is_active BOOLEAN DEFAULT true,
+  created_by UUID REFERENCES users(id)
+);
+
 -- Pump Sales table
 CREATE TABLE pump_sales (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -80,8 +107,10 @@ CREATE TABLE expenses (
   receipt_number VARCHAR(100),
   payment_method payment_method NOT NULL,
   expense_date DATE NOT NULL,
+  account_id UUID REFERENCES internal_accounts(id),
   created_by UUID REFERENCES users(id),
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Fund Transfers table
@@ -132,26 +161,21 @@ CREATE TABLE expense_categories (
 
 -- Insert default expense categories
 INSERT INTO expense_categories (name, description) VALUES
-('Fuel', 'Petrol, diesel, and other fuel expenses'),
-('Maintenance', 'Vehicle and equipment maintenance'),
-('Repairs', 'Equipment and facility repairs'),
-('Utilities', 'Electricity, water, internet bills'),
-('Rent', 'Office and facility rent'),
-('Salaries', 'Staff salaries and wages'),
-('Insurance', 'Vehicle and property insurance'),
-('Licenses', 'Business licenses and permits'),
-('Marketing', 'Advertising and promotional expenses'),
-('Office Supplies', 'Stationery and office materials'),
-('Communication', 'Phone bills and communication services'),
-('Transportation', 'Travel and transportation costs'),
-('Professional Services', 'Legal, accounting, consulting fees'),
-('Training', 'Staff training and development'),
+('Generator', 'Generator fuel, maintenance, and related expenses'),
+('Workers'' fare and lunch', 'Transportation and meal allowances for workers'),
 ('Security', 'Security services and equipment'),
-('Cleaning', 'Cleaning supplies and services'),
-('Medical', 'Medical expenses and health insurance'),
-('Bank Charges', 'Bank fees and transaction charges'),
-('Miscellaneous', 'Other miscellaneous expenses'),
-('Taxes', 'Tax payments and obligations');
+('Transport', 'General transportation and logistics expenses'),
+('Government expenses', 'Government fees, taxes, and compliance costs'),
+('Offloading expenses', 'Loading, unloading, and handling expenses'),
+('Medical', 'Medical and health-related expenses'),
+('Travel expenses', 'Business travel and accommodation costs'),
+('Communication', 'Phone, internet, and communication services'),
+('Salary', 'Employee salaries and wages'),
+('Stationaries', 'Office stationery and supplies'),
+('Discount', 'Discounts, rebates, and allowances'),
+('Sadaqa', 'Charitable donations and religious contributions'),
+('Repair and Maintenance', 'Equipment and facility repair and maintenance'),
+('Rent', 'Facility and equipment rental expenses');
 
 -- Create indexes for better performance
 CREATE INDEX idx_pump_sales_date ON pump_sales(sale_date);
@@ -170,6 +194,8 @@ CREATE INDEX idx_notifications_is_read ON notifications(is_read);
 
 -- Enable RLS on all tables
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE stations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE internal_accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pump_sales ENABLE ROW LEVEL SECURITY;
 ALTER TABLE drum_sales ENABLE ROW LEVEL SECURITY;
 ALTER TABLE stock_items ENABLE ROW LEVEL SECURITY;
@@ -202,6 +228,40 @@ CREATE POLICY "Admins can update users" ON users
 
 CREATE POLICY "Admins can insert users" ON users
   FOR INSERT WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM users 
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
+-- Stations policies
+CREATE POLICY "Users can view stations" ON stations
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM users 
+      WHERE id = auth.uid() AND role IN ('admin', 'manager', 'cashier', 'viewer')
+    )
+  );
+
+CREATE POLICY "Admins can manage stations" ON stations
+  FOR ALL USING (
+    EXISTS (
+      SELECT 1 FROM users 
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
+-- Internal Accounts policies
+CREATE POLICY "Users can view internal accounts" ON internal_accounts
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM users 
+      WHERE id = auth.uid() AND role IN ('admin', 'manager', 'cashier', 'viewer')
+    )
+  );
+
+CREATE POLICY "Admins can manage internal accounts" ON internal_accounts
+  FOR ALL USING (
     EXISTS (
       SELECT 1 FROM users 
       WHERE id = auth.uid() AND role = 'admin'
@@ -413,5 +473,14 @@ $$ language 'plpgsql';
 
 -- Create triggers for updated_at
 CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_stations_updated_at BEFORE UPDATE ON stations
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_internal_accounts_updated_at BEFORE UPDATE ON internal_accounts
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_expenses_updated_at BEFORE UPDATE ON expenses
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 

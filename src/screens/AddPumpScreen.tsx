@@ -49,10 +49,11 @@ export default function AddPumpScreen() {
   const loadNextPumpNumber = async () => {
     try {
       const response = await pumpService.getNextPumpNumber(stationId);
-      if (response.success) {
+      const pumpNumber = response.data;
+      if (response.success && pumpNumber != null) {
         setFormData(prev => ({
           ...prev,
-          pumpNumber: response.data.toString(),
+          pumpNumber: pumpNumber.toString(),
         }));
       }
     } catch (error) {
@@ -163,20 +164,16 @@ export default function AddPumpScreen() {
 
   const [showFuelTypePicker, setShowFuelTypePicker] = useState(false);
 
-  const getFuelTypeColor = (fuelType: PumpFuelType) => {
-    switch (fuelType) {
-      case 'PMS':
-        return '#FF6B35';
-      case 'AGO':
-        return '#4CAF50';
-      case 'DPK':
-        return '#2196F3';
-      case 'LPG':
-        return '#FF9800';
-      default:
-        return '#F0C38E';
-    }
-  };
+   const getFuelTypeColor = (fuelType: PumpFuelType) => {
+     switch (fuelType) {
+       case 'PMS':
+         return '#FF6B35';
+       case 'AGO':
+         return '#4CAF50';
+       default:
+         return '#F0C38E';
+     }
+   };
 
   return (
     <LinearGradient colors={['#312C51', '#48426D']} style={styles.container}>

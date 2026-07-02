@@ -1,0 +1,465 @@
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  SafeAreaView,
+  Alert,
+  Dimensions,
+  TextInput,
+  Modal,
+  FlatList,
+} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../context/AuthContext';
+import { useNavigation } from '@react-navigation/native';
+import { supabase } from '../config/supabase';
+import { formatCurrency } from '../constants/currency';
+import { BatchPumpSale, BatchDrumSale, BatchSale, DEFAULT_BATCH_PUMP_SALE, DEFAULT_BATCH_DRUM_SALE } from '../types/sales';
+
+const { width } = Dimensions.get('window');
+
+const FUEL_TYPES = ['Petrol', 'Diesel', 'Kerosene', 'Gas']; // from types/sales.ts
+const PAYMENT_METHODS = ['cash', 'card', 'credit']; // from types/sales.ts
+const CUSTOMERS = ['Walk-in Custom', 'Regular Customer', 'Corporate Client'];
+const STATIONS = ['ISSIRO STATION', 'DEPOT ISSIRO', 'RUNGU STATION', 'DUNGU STATION', 'DURBA STATION', 'NIANGARA STATION'];
+const DRUM_STATIONS = ['DEPOT ISSIRO', 'DUNGU STATION'];
+
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+export default function SalesEntryScreen() {
+  const { appUser } = useAuth();
+  const navigation = useNavigation();
+   
+  const userStation = appUser?.station_id;
+  const [transactions, setTransactions] = useState<BatchSale[]>([
+    // Start with one empty transaction
+    {...DEFAULT_BATCH_PUMP_SALE, date: new Date().toISOString().split('T')[0]},
+  ]);
+  const [loading, setLoading] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [tempDate, setTempDate] = useState({ year: new Date().getFullYear(), month: new Date().getMonth() + 1, day: new Date().getDate() });
+  const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth() + 1);
+  const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
+  const [batchDate, setBatchDate] = useState(new Date().toISOString().split('T')[0]); // for batch date setting
+
+  const getDaysInMonth = (year: number, month: number) => new Date(year, month, 0).getDate();
+  const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month - 1, 1).getDay();
+
+  const openDatePicker = () => {
+    const selected = new Date(`${batchDate}T00:00:00`);
+    setCalendarMonth(selected.getMonth() + 1);
+    setCalendarYear(selected.getFullYear());
+    setTempDate({
+      year: selected.getFullYear(),
+      month: selected.getMonth() + 1,
+      day: selected.getDate(),
+    });
+    setShowDatePicker(true);
+  };
+
+  const applyTempDate = () => {
+    const month = tempDate.month || calendarMonth;
+    const year = tempDate.year || calendarYear;
+    const day = Math.min(tempDate.day || 1, getDaysInMonth(year, month));
+    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    setBatchDate(dateStr);
+    setShowDatePicker(false);
+  };
+
+  const changeCalendarMonth = (delta: number) => {
+    let m = calendarMonth + delta;
+    let y = calendarYear;
+    if (m < 1) { m = 12; y -= 1; }
+    if (m > 12) { m = 1; y += 1; }
+    setCalendarMonth(m);
+    setCalendarYear(y);
+  };
+
+  const renderCalendar = () => {
+    const daysInMonth = getDaysInMonth(calendarYear, calendarMonth);
+    const firstDay = getFirstDayOfMonth(calendarYear, calendarMonth);
+    const daysToRender: Array<{ day: number; empty: boolean }> = [];
+    for (let i = 0; i < firstDay; i++) {
+      daysToRender.push({ day: 0, empty: true });
+    }
+    for (let day = 1; day <= daysInMonth; day++) {
+      daysToRender.push({ day, empty: false });
+    }
+    return daysToRender;
+  };
+
+  const refreshDefaultTransactions = () => {
+    setTransactions([
+      {...DEFAULT_BATCH_PUMP_SALE, date: new Date().toISOString().split('T')[0]},
+    ]);
+  };
+
+  const getItemTypeForStation = (station: string): 'pump' | 'drum' => {
+    return DRUM_STATIONS.includes(station) ? 'drum' : 'pump';
+  };
+
+  const getAvailableStations = (): string[] => {
+    if (appUser?.role === 'admin') {
+      return STATIONS;
+    }
+    if (userStation) {
+      const stationName = STATIONS.find(station => 
+        station.toLowerCase().replace(/\s+/g, '_') === userStation.toLowerCase()
+      );
+      return stationName ? [stationName] : STATIONS;
+    }
+    return STATIONS;
+  };
+
+  const handleStationChange = (transactionIndex: number, newStation: string) => {
+    const newItemType = getItemTypeForStation(newStation);
+    setTransactions(prev => {
+      const updatedTransactions = [...prev];
+      const transaction = updatedTransactions[transactionIndex];
+      if ('pumpNumber' in transaction) {
+        // Pump transaction
+        updatedTransactions[transactionIndex] = {
+          ...transaction,
+          station: newStation,
+        } as BatchPumpSale;
+      } else {
+        // Drum transaction
+        updatedTransactions[transactionIndex] = {
+          ...transaction,
+          station: newStation,
+        } as BatchDrumSale;
+      }
+      return updatedTransactions;
+    });
+  };
+
+  const calculateTotals = (transactions: BatchSale[]) => {
+    let subtotal = 0;
+    transactions.forEach(t => {
+      if ('pumpNumber' in t) {
+        const volume = parseFloat(t.volumeLiters) || 0;
+        const price = parseFloat(t.pricePerLiter) || 0;
+        subtotal += volume * price;
+      } else {
+        const quantity = parseInt(t.quantity) || 0;
+        const price = parseFloat(t.pricePerDrum) || 0;
+        subtotal += quantity * price;
+      }
+    });
+    const tax = subtotal * 0; // tax rate 0% for now
+    const total = subtotal + tax;
+    return { subtotal, tax, total };
+  };
+
+  const updateTransactionField = (transactionIndex: number, field: keyof BatchSale, value: any) => {
+    setTransactions(prev => {
+      const updatedTransactions = [...prev];
+      const transaction = updatedTransactions[transactionIndex];
+      if ('pumpNumber' in transaction) {
+        // Pump transaction
+        updatedTransactions[transactionIndex] = {
+          ...transaction,
+          [field]: value,
+        } as BatchPumpSale;
+      } else {
+        // Drum transaction
+        updatedTransactions[transactionIndex] = {
+          ...transaction,
+          [field]: value,
+        } as BatchDrumSale;
+      }
+      return updatedTransactions;
+    });
+  };
+
+  const addTransaction = (type: 'pump' | 'drum') => {
+    const newTransaction = type === 'pump' 
+      ? {...DEFAULT_BATCH_PUMP_SALE, date: batchDate} 
+      : {...DEFAULT_BATCH_DRUM_SALE, date: batchDate};
+    setTransactions(prev => [...prev, newTransaction]);
+  };
+
+  const removeTransaction = (index: number) => {
+    setTransactions(prev => {
+      const updated = [...prev];
+      updated.splice(index, 1);
+      // Ensure at least one transaction remains
+      if (updated.length === 0) {
+        return [{...DEFAULT_BATCH_PUMP_SALE, date: batchDate}];
+      }
+      return updated;
+    });
+  };
+
+  const copyTransaction = (index: number) => {
+    const transactionToCopy = transactions[index];
+    setTransactions(prev => [...prev, transactionToCopy]);
+  };
+
+  const batchSetField = (field: keyof BatchSale, value: any) => {
+    setTransactions(prev => prev.map(t => {
+      if ('pumpNumber' in t) {
+        return {...t, [field]: value} as BatchPumpSale;
+      } else {
+        return {...t, [field]: value} as BatchDrumSale;
+      }
+    }));
+  };
+
+  const handleSaveDraft = async () => {
+    try {
+      setLoading(true);
+      Alert.alert('Success', 'Batch saved as draft');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to save draft');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmitBatch = async () => {
+    try {
+      setLoading(true);
+      for (const transaction of transactions) {
+        if ('pumpNumber' in transaction) {
+          // Pump sale
+          const { error } = await supabase
+            .from('daily_sales')
+            .insert({
+              sale_type: 'pump',
+              fuel_type: transaction.fuelType,
+              station_name: transaction.station,
+              pump_number: parseInt(transaction.pumpNumber) || 1,
+              volume_liters: parseFloat(transaction.volumeLiters) || 0,
+              price_per_liter: parseFloat(transaction.pricePerLiter) || 0,
+              total_amount: (parseFloat(transaction.volumeLiters) || 0) * (parseFloat(transaction.pricePerLiter) || 0),
+              payment_method: transaction.payment,
+              sale_date: transaction.date,
+              created_by: appUser?.id,
+            });
+          if (error) {
+            console.error('Error inserting pump sale:', error);
+          }
+        } else {
+          // Drum sale
+          const { error } = await supabase
+            .from('daily_sales')
+            .insert({
+              sale_type: 'drum',
+              drum_type: transaction.drumType,
+              station_name: transaction.station,
+              quantity: parseInt(transaction.quantity) || 0,
+              price_per_drum: parseFloat(transaction.pricePerDrum) || 0,
+              total_amount: (parseInt(transaction.quantity) || 0) * (parseFloat(transaction.pricePerDrum) || 0),
+              payment_method: transaction.payment,
+              sale_date: transaction.date,
+              created_by: appUser?.id,
+            });
+          if (error) {
+            console.error('Error inserting drum sale:', error);
+          }
+        }
+      }
+      Alert.alert('Success', 'Batch submitted successfully');
+      // Reset to one empty transaction
+      setTransactions([{...DEFAULT_BATCH_PUMP_SALE, date: batchDate}]);
+    } catch (error) {
+      console.error('Error submitting batch:', error);
+      Alert.alert('Error', 'Failed to submit batch');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePrint = () => {
+    Alert.alert('Print', 'Print functionality will be implemented');
+  };
+
+  const handlePrint = () => {
+    Alert.alert('Print', 'Print functionality will be implemented');
+  };
+
+  const requestCameraPermission = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Required', 'Camera permission is needed to capture receipt images.');
+      return false;
+    }
+    return true;
+  };
+
+  const requestMediaLibraryPermission = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Required', 'Media library permission is needed to select receipt images.');
+      return false;
+    }
+    return true;
+  };
+
+  const captureImage = async () => {
+    const hasPermission = await requestCameraPermission();
+    if (!hasPermission) return;
+
+    try {
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: 'images' as any,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        setReceiptImages(prev => [...prev, result.assets[0].uri]);
+      }
+    } catch (error) {
+      console.error('Camera capture error:', error);
+      Alert.alert('Error', 'Failed to capture image');
+    }
+  };
+
+  const selectImageFromGallery = async () => {
+    const hasPermission = await requestMediaLibraryPermission();
+    if (!hasPermission) return;
+
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: 'images' as any,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        setReceiptImages(prev => [...prev, result.assets[0].uri]);
+      }
+    } catch (error) {
+      console.error('Gallery selection error:', error);
+      Alert.alert('Error', 'Failed to select image from gallery');
+    }
+  };
+
+  const showImageOptions = () => {
+    Alert.alert(
+      'Add Receipt Image',
+      'Choose how you want to add the image',
+      [
+        { text: 'Camera', onPress: captureImage },
+        { text: 'Gallery', onPress: selectImageFromGallery },
+        { text: 'Cancel', style: 'cancel' }
+      ]
+    );
+  };
+
+  const removeImage = (index: number) => {
+    setReceiptImages(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const renderItemCard = (item: SalesItem) => (
+    <View style={styles.itemCard}>
+      <View style={styles.itemHeader}>
+        <View style={styles.itemDropdown}>
+          <Text style={styles.itemLabel}>ITEM</Text>
+          <TouchableOpacity 
+            style={styles.dropdownContainer}
+            onPress={() => {
+              const currentIndex = FUEL_TYPES.indexOf(item.itemName);
+              const nextIndex = (currentIndex + 1) % FUEL_TYPES.length;
+              updateItem(item.id, 'itemName', FUEL_TYPES[nextIndex]);
+            }}
+          >
+            <Text style={styles.dropdownText}>{item.itemName}</Text>
+            <Ionicons name="chevron-down" size={16} color="#666" />
+          </TouchableOpacity>
+        </View>
+       <TouchableOpacity
+          style={styles.deleteButton}
+          onPress={() => removeItem(item.id)}
+      >
+          <Ionicons name="trash" size={20} color="#FF6B6B" />
+      </TouchableOpacity>
+    </View>
+      
+      <View style={styles.itemInputs}>
+        {item.itemType === 'pump' ? (
+          <>
+           <View style={styles.inputGroup}>
+               <Text style={styles.inputLabel}>QTY (LITERS)</Text>
+               <TextInput
+                 style={styles.inputContainer}
+                 value={item.quantity.toString()}
+                 onChangeText={(text) => {
+                   const value = parseFloat(text) || 0;
+                   // Validate quantity is positive and reasonable
+                   if (value < 0) {
+                     Alert.alert('Error', 'Quantity cannot be negative');
+                     return;
+                   }
+                   if (value > 50000) {
+                     Alert.alert('Error', 'Quantity exceeds maximum limit of 50,000 liters');
+                     return;
+                   }
+                   updateItem(item.id, 'quantity', value);
+                 }}
+                 keyboardType="numeric"
+                 placeholder="0.00"
+               />
+             </View>
+          <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>RATE (CDF)</Text>
+              <TextInput
+                style={styles.inputContainer}
+                value={item.rate.toString()}
+                onChangeText={(text) => updateItem(item.id, 'rate', parseFloat(text) || 0)}
+                keyboardType="numeric"
+            placeholder="0"
+              />
+            </View>
+          </>
+        ) : (
+          <>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>NUMBER OF DRUMS</Text>
+              <TextInput
+                style={styles.inputContainer}
+                value={item.quantity.toString()}
+                onChangeText={(text) => updateItem(item.id, 'quantity', parseInt(text) || 0)}
+            keyboardType="numeric"
+                placeholder="0"
+          />
+        </View>
+        <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>RATE (CDF)</Text>
+              <TextInput
+                style={styles.inputContainer}
+                value={item.rate.toString()}
+                onChangeText={(text) => updateItem(item.id, 'rate', parseFloat(text) || 0)}
+            keyboardType="numeric"
+                placeholder="0"
+              />
+            </View>
+          </>
+        )}
+        <View style={styles.totalContainer}>
+          <Text style={styles.itemTotal}>{formatCurrency.CDF(item.total)}</Text>
+          <Text style={styles.itemTotalUSD}>
+            {formatCurrency.USD(item.total / 2850.50)}
+          </Text>
+        </View>
+      </View>
+
+      {item.itemType === 'drum' && (
+        <Text style={styles.drumInfo}>
+          {item.quantity} Drums x 205L = {item.quantity * 205}L total. Rate auto-calculated.
+        </Text>
+      )}
+    </View>
+  );
+

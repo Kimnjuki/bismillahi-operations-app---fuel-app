@@ -71,18 +71,7 @@ export interface PumpSale extends BaseEntity {
   created_by: string;
 }
 
-export interface DrumSale extends BaseEntity {
-  drum_type: DrumType;
-  quantity: number;
-  price_per_drum: number;
-  total_amount: number;
-  payment_method: PaymentMethod;
-  sale_date: string;
-  created_by: string;
-}
-
-export type FuelType = 'Petrol' | 'Diesel' | 'Kerosene' | 'Gas';
-export type DrumType = '200L Drum' | '100L Drum' | '50L Drum' | '25L Jerrycan';
+export type FuelType = 'PMS' | 'AGO';
 export type PaymentMethod = 'cash' | 'card' | 'credit';
 
 // Stock types
@@ -108,6 +97,20 @@ export interface StockVariance extends BaseEntity {
   stock_items?: StockItem;
 }
 
+// Internal Account types
+export type InternalAccountType = 'operating' | 'transit' | 'cash' | 'bank' | 'petty_cash' | 'fuel_account' | 'operations';
+
+export interface InternalAccount extends BaseEntity {
+  account_name: string;
+  account_code: string;
+  account_type: InternalAccountType;
+  station_id?: string;
+  station_name?: string;
+  balance: number;
+  currency: 'USD' | 'CDF';
+  is_active: boolean;
+}
+
 // Expense types
 export interface Expense extends BaseEntity {
   category: string;
@@ -118,6 +121,8 @@ export interface Expense extends BaseEntity {
   payment_method: PaymentMethod;
   expense_date: string;
   created_by: string;
+  account_id?: string;
+  account?: InternalAccount;
 }
 
 export interface ExpenseCategory extends BaseEntity {
@@ -263,7 +268,9 @@ export type RootStackParamList = {
   TransporterManagement: undefined;
   TaxPayment: undefined;
   TruckTransactionHistory: undefined;
+  TrucksDelivered: undefined;
   AddTransporter: undefined;
+  PumpAndDippingManagement: { stationId?: string };
 };
 
 // Auth types
@@ -482,9 +489,7 @@ export const USER_ROLES: Record<UserRole, string> = {
   viewer: 'Viewer',
 };
 
-export const FUEL_TYPES: FuelType[] = ['Petrol', 'Diesel', 'Kerosene', 'Gas'];
-
-export const DRUM_TYPES: DrumType[] = ['200L Drum', '100L Drum', '50L Drum', '25L Jerrycan'];
+export const FUEL_TYPES: FuelType[] = ['PMS', 'AGO'];
 
 export const PAYMENT_METHODS: PaymentMethod[] = ['cash', 'card', 'credit'];
 
@@ -499,10 +504,6 @@ export const isUser = (obj: any): obj is User => {
 
 export const isPumpSale = (obj: any): obj is PumpSale => {
   return obj && typeof obj.pump_number === 'number' && typeof obj.fuel_type === 'string';
-};
-
-export const isDrumSale = (obj: any): obj is DrumSale => {
-  return obj && typeof obj.drum_type === 'string' && typeof obj.quantity === 'number';
 };
 
 export const isStockItem = (obj: any): obj is StockItem => {
@@ -611,15 +612,14 @@ export interface Station extends BaseEntity {
   station_name: string;
   station_code: string;
   location: string;
-  capacity_liters: number;
-  current_stock: number;
+  capacity_liters?: number;
+  current_stock?: number;
   is_active: boolean;
-  created_by: string;
-  // Additional properties for station settings
-  name: string;
-  code: string;
-  system_type: SystemType;
-  usd_support: boolean;
+  created_by?: string;
+  name?: string;
+  code?: string;
+  system_type?: SystemType;
+  usd_support?: boolean;
 }
 
 export interface TaxPayment extends BaseEntity {
@@ -629,11 +629,14 @@ export interface TaxPayment extends BaseEntity {
   border_point: string;
   truck_id: string;
   transporter_id: string;
+  station_id?: string;
+  deducted_account_type?: string;
   payment_reference: string;
   status: PaymentStatus;
   notes?: string;
   created_by: string;
   transporter?: Transporter;
+  station?: Station;
 }
 
 export interface TruckTransaction extends BaseEntity {
@@ -672,6 +675,17 @@ export interface DeliverySummary {
   in_transit_deliveries: number;
 }
 
+export interface TruckDeliveredSummary {
+  truck_id: string;
+  transporter_name: string;
+  station_name: string;
+  total_liters: number;
+  deliveries_count: number;
+  first_delivery_date: string;
+  last_delivery_date: string;
+  products: string[];
+}
+
 // Creditors and Suppliers types
 export interface Creditor extends BaseEntity {
   name: string;
@@ -696,16 +710,275 @@ export interface CreditorSupplierSummary {
   total_suppliers: number;
 }
 
-// Station Settings types
+// Station capabilities - feature flags for what each station can do
+export interface StationCapabilities {
+  // Sales Module
+  pump_sales: boolean;
+  sales_records: boolean;
+  unified_receipt: boolean;
+
+  // Stock Management
+  stock_tracking: boolean;
+  stock_variance: boolean;
+  stock_alerts: boolean;
+
+  // Expense Management
+  expense_entry: boolean;
+  expense_history: boolean;
+  expense_categories: boolean;
+
+  // Financial Module
+  fund_transfer: boolean;
+  exchange_rate: boolean;
+  account_receivables: boolean;
+  account_payables: boolean;
+  creditors_suppliers: boolean;
+
+  // Fuel Operations
+  pump_management: boolean;
+  dipping_management: boolean;
+  fuel_delivery_tracking: boolean;
+  tax_payment_tracking: boolean;
+  transporter_management: boolean;
+
+  // Reporting & Analytics
+  reports_generation: boolean;
+  daily_consolidated_report: boolean;
+  analytics_dashboard: boolean;
+
+  // System Features
+  notifications: boolean;
+  data_sync: boolean;
+  auto_backup: boolean;
+  biometric_auth: boolean;
+  location_services: boolean;
+  sound_effects: boolean;
+}
 
 export type SystemType = 'pump' | 'drum';
 
+// Station configuration (settings beyond capabilities)
+export interface StationConfiguration {
+  system_type: SystemType;
+  usd_support: boolean;
+  multi_currency: boolean;
+  cdf_support: boolean;
+  pricing_unit: 'per_liter' | 'both';
+  default_currency: Currency;
+  local_currency: Currency;
+  exchange_rate_update: 'manual' | 'automatic';
+  low_stock_threshold: number;
+  auto_sync_interval: number; // minutes
+  enable_push_notifications: boolean;
+  enable_email_notifications: boolean;
+  enable_sms_notifications: boolean;
+  language: 'en' | 'fr';
+  date_format: 'DD/MM/YYYY' | 'MM/DD/YYYY' | 'YYYY-MM-DD';
+  time_format: '12h' | '24h';
+  fuel_types_enabled: FuelType[];
+  payment_methods_enabled: PaymentMethod[];
+  pump_count: number;
+  tank_count: number;
+  max_credit_limit: number;
+  tax_rate: number;
+  operating_hours_start: string;
+  operating_hours_end: string;
+}
+
+// Station Settings with all enhanced features
 export interface StationSettings {
   selected_station_id: string;
   system_type: SystemType;
   usd_support: boolean;
   updated_by: string;
+  updated_at?: string;
+  // New enhanced settings
+  capabilities: StationCapabilities;
+  configuration: StationConfiguration;
+  is_active: boolean;
+  maintenance_mode: boolean;
+  notes?: string;
 }
+
+// Helper type for capability categories
+export interface CapabilityCategory {
+  id: string;
+  title: string;
+  subtitle: string;
+  icon: string;
+  color: string;
+  description: string;
+  features: CapabilityFeature[];
+}
+
+export interface CapabilityFeature {
+  key: keyof StationCapabilities;
+  label: string;
+  description: string;
+  icon: string;
+}
+
+// Default capabilities (all enabled)
+export const DEFAULT_CAPABILITIES: StationCapabilities = {
+  pump_sales: true,
+  sales_records: true,
+  unified_receipt: true,
+  stock_tracking: true,
+  stock_variance: true,
+  stock_alerts: true,
+  expense_entry: true,
+  expense_history: true,
+  expense_categories: true,
+  fund_transfer: true,
+  exchange_rate: true,
+  account_receivables: true,
+  account_payables: true,
+  creditors_suppliers: true,
+  pump_management: true,
+  dipping_management: true,
+  fuel_delivery_tracking: true,
+  tax_payment_tracking: true,
+  transporter_management: true,
+  reports_generation: true,
+  daily_consolidated_report: true,
+  analytics_dashboard: true,
+  notifications: true,
+  data_sync: true,
+  auto_backup: true,
+  biometric_auth: false,
+  location_services: false,
+  sound_effects: true,
+};
+
+// Capability categories with features
+export const CAPABILITY_CATEGORIES: CapabilityCategory[] = [
+  {
+    id: 'sales',
+    title: 'Sales Module',
+    subtitle: 'Sales & receipt management',
+    icon: 'cash',
+    color: '#4CAF50',
+    description: 'Configure sales-related features for this station',
+    features: [
+      { key: 'pump_sales', label: 'Pump Sales', description: 'Record pump fuel sales', icon: 'car-sport' },
+      { key: 'sales_records', label: 'Sales Records', description: 'View sales history & records', icon: 'document-text' },
+      { key: 'unified_receipt', label: 'Unified Receipt', description: 'Generate unified sales receipts', icon: 'receipt' },
+    ],
+  },
+  {
+    id: 'stock',
+    title: 'Stock Management',
+    subtitle: 'Inventory & stock control',
+    icon: 'cube',
+    color: '#FF9800',
+    description: 'Configure stock management features for this station',
+    features: [
+      { key: 'stock_tracking', label: 'Stock Tracking', description: 'Track inventory levels in real-time', icon: 'analytics' },
+      { key: 'stock_variance', label: 'Stock Variance', description: 'Track stock discrepancies & variances', icon: 'trending-down' },
+      { key: 'stock_alerts', label: 'Stock Alerts', description: 'Get low stock & restock alerts', icon: 'alert-circle' },
+    ],
+  },
+  {
+    id: 'expenses',
+    title: 'Expense Management',
+    subtitle: 'Expense tracking & categories',
+    icon: 'cash-outline',
+    color: '#F44336',
+    description: 'Configure expense-related features for this station',
+    features: [
+      { key: 'expense_entry', label: 'Expense Entry', description: 'Record and submit expenses', icon: 'add-circle' },
+      { key: 'expense_history', label: 'Expense History', description: 'View expense records history', icon: 'time' },
+      { key: 'expense_categories', label: 'Expense Categories', description: 'Manage expense categories', icon: 'folder' },
+    ],
+  },
+  {
+    id: 'financial',
+    title: 'Financial Module',
+    subtitle: 'Accounts, transfers & exchange',
+    icon: 'wallet',
+    color: '#9C27B0',
+    description: 'Configure financial features for this station',
+    features: [
+      { key: 'fund_transfer', label: 'Fund Transfer', description: 'Transfer funds between accounts', icon: 'swap-horizontal' },
+      { key: 'exchange_rate', label: 'Exchange Rate', description: 'Manage exchange rates', icon: 'trending-up' },
+      { key: 'account_receivables', label: 'Account Receivables', description: 'Manage money owed to you', icon: 'arrow-back-circle' },
+      { key: 'account_payables', label: 'Account Payables', description: 'Manage money you owe', icon: 'arrow-forward-circle' },
+      { key: 'creditors_suppliers', label: 'Creditors & Suppliers', description: 'Manage vendor relationships', icon: 'people' },
+    ],
+  },
+  {
+    id: 'fuel_ops',
+    title: 'Fuel Operations',
+    subtitle: 'Pumps, tanks & deliveries',
+    icon: 'flame',
+    color: '#E91E63',
+    description: 'Configure fuel operations features for this station',
+    features: [
+      { key: 'pump_management', label: 'Pump Management', description: 'Manage fuel pumps & readings', icon: 'speedometer' },
+      { key: 'dipping_management', label: 'Dipping Management', description: 'Tank dipping & calibration', icon: 'water' },
+      { key: 'fuel_delivery_tracking', label: 'Fuel Delivery', description: 'Track fuel deliveries', icon: 'car' },
+      { key: 'tax_payment_tracking', label: 'Tax Payment', description: 'Track tax payments', icon: 'document' },
+      { key: 'transporter_management', label: 'Transporters', description: 'Manage transporters & trucks', icon: 'bus' },
+    ],
+  },
+  {
+    id: 'reports',
+    title: 'Reporting & Analytics',
+    subtitle: 'Reports & data insights',
+    icon: 'bar-chart',
+    color: '#2196F3',
+    description: 'Configure reporting & analytics features for this station',
+    features: [
+      { key: 'reports_generation', label: 'Reports Generation', description: 'Generate custom reports', icon: 'document-text' },
+      { key: 'daily_consolidated_report', label: 'Daily Consolidated', description: 'Daily consolidated reports', icon: 'calendar' },
+      { key: 'analytics_dashboard', label: 'Analytics Dashboard', description: 'View charts & analytics', icon: 'stats-chart' },
+    ],
+  },
+  {
+    id: 'system',
+    title: 'System Features',
+    subtitle: 'App-wide capabilities',
+    icon: 'settings',
+    color: '#607D8B',
+    description: 'Configure system-wide features for this station',
+    features: [
+      { key: 'notifications', label: 'Notifications', description: 'Push and in-app notifications', icon: 'notifications' },
+      { key: 'data_sync', label: 'Data Sync', description: 'Automatically sync data', icon: 'sync' },
+      { key: 'auto_backup', label: 'Auto Backup', description: 'Backup data automatically', icon: 'cloud-done' },
+      { key: 'biometric_auth', label: 'Biometric Auth', description: 'Fingerprint or face ID login', icon: 'finger-print' },
+      { key: 'location_services', label: 'Location Services', description: 'Allow location tracking', icon: 'location' },
+      { key: 'sound_effects', label: 'Sound Effects', description: 'Play sound effects', icon: 'volume-high' },
+    ],
+  },
+];
+
+// Default configuration
+export const DEFAULT_CONFIGURATION: StationConfiguration = {
+  system_type: 'pump',
+  usd_support: true,
+  multi_currency: true,
+  cdf_support: true,
+  pricing_unit: 'per_liter',
+  default_currency: 'CDF',
+  local_currency: 'CDF',
+  exchange_rate_update: 'manual',
+  low_stock_threshold: 1000,
+  auto_sync_interval: 5,
+  enable_push_notifications: true,
+  enable_email_notifications: false,
+  enable_sms_notifications: false,
+  language: 'en',
+  date_format: 'DD/MM/YYYY',
+  time_format: '24h',
+  fuel_types_enabled: ['PMS', 'AGO'],
+  payment_methods_enabled: ['cash', 'card', 'credit'],
+  pump_count: 0,
+  tank_count: 0,
+  max_credit_limit: 0,
+  tax_rate: 0,
+  operating_hours_start: '06:00',
+  operating_hours_end: '22:00',
+};
 
 // Pump Management types
 export interface Pump extends BaseEntity {
@@ -717,7 +990,7 @@ export interface Pump extends BaseEntity {
   created_by: string;
 }
 
-export type PumpFuelType = 'PMS' | 'AGO' | 'DPK' | 'LPG';
+export type PumpFuelType = 'PMS' | 'AGO';
 
 // Tank and Dipping Management types
 export interface Tank extends BaseEntity {
@@ -744,3 +1017,51 @@ export interface DippingReading extends BaseEntity {
   notes?: string;
 }
 
+export interface PumpReading extends BaseEntity {
+  pump_id: string;
+  reading_date: string;
+  today_reading: number; // in liters
+  yesterday_reading: number; // in liters
+  daily_sales: number; // calculated as today_reading - yesterday_reading
+  recorded_by: string;
+  notes?: string;
+}
+
+// Combined Pump & Dipping Management types for unified screen
+export interface PumpReadingWithPump extends PumpReading {
+  pump_name?: string;
+  pump_number?: number;
+  fuel_type?: PumpFuelType;
+}
+
+export interface DippingReadingWithTank extends DippingReading {
+  tank_name?: string;
+  tank_number?: number;
+  fuel_type?: PumpFuelType;
+  capacity?: number;
+  pumps?: string[];
+}
+
+export interface FuelTypeSalesSummary {
+  fuel_type: PumpFuelType;
+  total_pump_sales: number; // Sum of daily_sales from pumps of this fuel type
+  total_tank_consumption: number; // Expected consumption based on tank dipping changes + offloads
+  offload_quantity: number; // Fuel offloaded/added to tanks
+  discrepancy: number; // total_pump_sales - total_tank_consumption
+  has_error: boolean; // true if discrepancy is non-zero
+  previous_closing_dip: number; // yesterday's closing dip
+  current_dip: number; // today's dip reading
+  expected_closing_dip: number; // previous_closing_dip + offloads - total_pump_sales
+}
+
+export interface StationDailyReport {
+  station_id: string;
+  station_name: string;
+  reading_date: string;
+  pump_readings: PumpReadingWithPump[];
+  tank_dippings: DippingReadingWithTank[];
+  fuel_summaries: FuelTypeSalesSummary[];
+  total_litres_sold: number;
+  has_validation_errors: boolean;
+  validation_messages: string[];
+}

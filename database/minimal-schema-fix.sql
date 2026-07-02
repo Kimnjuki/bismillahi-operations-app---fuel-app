@@ -129,12 +129,19 @@ CREATE POLICY expense_categories_policy ON expense_categories FOR ALL USING (tru
 
 -- Insert some default expense categories
 INSERT INTO expense_categories (name, description) VALUES
-('Fuel', 'Fuel and petroleum products'),
-('Maintenance', 'Equipment and vehicle maintenance'),
-('Utilities', 'Electricity, water, and other utilities'),
-('Staff', 'Staff salaries and benefits'),
-('Office', 'Office supplies and equipment'),
-('Transport', 'Transportation costs'),
-('Marketing', 'Marketing and advertising'),
-('Other', 'Other miscellaneous expenses')
+('Generator', 'Generator fuel, maintenance, and related expenses'),
+('Workers'' fare and lunch', 'Transportation and meal allowances for workers'),
+('Security', 'Security services and equipment'),
+('Transport', 'General transportation and logistics expenses'),
+('Government expenses', 'Government fees, taxes, and compliance costs'),
+('Offloading expenses', 'Loading, unloading, and handling expenses'),
+('Medical', 'Medical and health-related expenses'),
+('Travel expenses', 'Business travel and accommodation costs'),
+('Communication', 'Phone, internet, and communication services'),
+('Salary', 'Employee salaries and wages'),
+('Stationaries', 'Office stationery and supplies'),
+('Discount', 'Discounts, rebates, and allowances'),
+('Sadaqa', 'Charitable donations and religious contributions'),
+('Repair and Maintenance', 'Equipment and facility repair and maintenance'),
+('Rent', 'Facility and equipment rental expenses')
 ON CONFLICT DO NOTHING;

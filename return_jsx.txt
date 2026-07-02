@@ -1,0 +1,358 @@
+    <View style={styles.container}>
+      <SafeAreaView style={styles.safeArea}>
+        {/* Header */}
+        <LinearGradient colors={['#312C51', '#48426D']} style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={24} color="#ffffff" />
+          </TouchableOpacity>
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerTitle}>Batch Sales Entry</Text>
+            <TouchableOpacity style={styles.dateButton} onPress={openDatePicker}>
+              <Text style={styles.headerDate}>?? {batchDate}</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.headerSpacer} />
+        </LinearGradient>
+
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          {/* Sales Information - Batch Header */}
+          <View style={styles.salesInfoContainer}>
+            <View style={styles.infoRow}>
+              <View style={styles.infoGroup}>
+                <Text style={styles.infoLabel}>Station</Text>
+                <TouchableOpacity 
+                  style={styles.infoDropdown}
+                  onPress={() => {
+                    const availableStations = getAvailableStations();
+                    const currentIndex = availableStations.indexOf(transactions[0].station);
+                    const nextIndex = (currentIndex + 1) % availableStations.length;
+                    batchSetField('station', availableStations[nextIndex]);
+                  }}
+                >
+                  <Text style={styles.infoText}>{transactions[0].station}</Text>
+                  <Ionicons name="chevron-down" size={16} color="#666" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.infoGroup}>
+                <Text style={styles.infoLabel}>Customer</Text>
+                <TouchableOpacity style={styles.infoDropdown}>
+                  <Text style={styles.infoText}>{transactions[0].customer}</Text>
+                  <Ionicons name="chevron-down" size={16} color="#666" />
+                </TouchableOpacity>
+              </View>
+            </View>
+            <View style={styles.infoRow}>
+              <View style={styles.infoGroup}>
+                <Text style={styles.infoLabel}>Payment</Text>
+                <TouchableOpacity style={styles.infoDropdown}>
+                  <Text style={styles.infoText}>{transactions[0].payment}</Text>
+                  <Ionicons name="chevron-down" size={16} color="#666" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.infoGroup}>
+                <Text style={styles.infoLabel}>Ref No</Text>
+                <TextInput
+                  style={styles.infoInput}
+                  value={transactions[0].refNo}
+                  onChangeText={(text) => batchSetField('refNo', text)}
+                  placeholder="e.g., 1001"
+                  placeholderTextColor="#999"
+                />
+              </View>
+            </View>
+          </View>
+
+          {/* Batch Actions */}
+          <View style={styles.batchActionsContainer}>
+            <TouchableOpacity style={styles.batchActionButton} onPress={() => batchSetField('date', batchDate)}>
+              <Ionicons name="calendar" size={20} color="#312C51" />
+              <Text style={styles.batchActionText}>Apply Date to All</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.batchActionButton} onPress={() => batchSetField('payment', transactions[0].payment)}>
+              <Ionicons name="cash" size={20} color="#312C51" />
+              <Text style={styles.batchActionText}>Apply Payment to All</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.batchActionButton} onPress={() => batchSetField('customer', transactions[0].customer)}>
+              <Ionicons name="person" size={20} color="#312C51" />
+              <Text style={styles.batchActionText}>Apply Customer to All</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.batchActionButton} onPress={() => batchSetField('station', transactions[0].station)}>
+              <Ionicons name="map" size={20} color="#312C51" />
+              <Text style={styles.batchActionText}>Apply Station to All</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Transactions List */}
+          <View style={styles.transactionsContainer}>
+            {transactions.map((transaction, index) => (
+              <View key={index} style={styles.transactionCard}>
+                <View style={styles.transactionHeader}>
+                  <Text style={styles.transactionType}>
+                    {('pumpNumber' in transaction) ? 'PUMP SALE' : 'DRUM SALE'}
+                  </Text>
+                  <View style={styles.transactionActions}>
+                    <TouchableOpacity style={styles.actionButton} onPress={() => copyTransaction(index)}>
+                      <Ionicons name="copy" size={18} color="#312C51" />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.actionButton} onPress={() => removeTransaction(index)}>
+                      <Ionicons name="trash" size={18} color="#FF6B6B" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                
+                {('pumpNumber' in transaction) ? (
+                  // Pump Transaction Fields
+                  <>
+                    <View style={styles.fieldRow}>
+                      <View style={styles.fieldGroup}>
+                        <Text style={styles.fieldLabel}>Pump #</Text>
+                        <TextInput
+                          style={styles.fieldInput}
+                          value={transaction.pumpNumber}
+                          onChangeText={(text) => updateTransactionField(index, 'pumpNumber', text)}
+                          keyboardType="numeric"
+                          placeholder="1"
+                        />
+                      </View>
+                      <View style={styles.fieldGroup}>
+                        <Text style={styles.fieldLabel}>Fuel Type</Text>
+                        <TouchableOpacity 
+                          style={styles.fieldDropdown}
+                          onPress={() => {
+                            const currentIndex = FUEL_TYPES.indexOf(transaction.fuelType);
+                            const nextIndex = (currentIndex + 1) % FUEL_TYPES.length;
+                            updateTransactionField(index, 'fuelType', FUEL_TYPES[nextIndex]);
+                          }}
+                        >
+                          <Text style={styles.fieldText}>{transaction.fuelType}</Text>
+                          <Ionicons name="chevron-down" size={16} color="#666" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                    
+                    <View style={styles.fieldRow}>
+                      <View style={styles.fieldGroup}>
+                        <Text style={styles.fieldLabel}>Volume (Liters)</Text>
+                        <TextInput
+                          style={styles.fieldInput}
+                          value={transaction.volumeLiters}
+                          onChangeText={(text) => updateTransactionField(index, 'volumeLiters', text)}
+                          keyboardType="numeric"
+                          placeholder="0.00"
+                        />
+                      </View>
+                      <View style={styles.fieldGroup}>
+                        <Text style={styles.fieldLabel}>Price/Liter (CDF)</Text>
+                        <TextInput
+                          style={styles.fieldInput}
+                          value={transaction.pricePerLiter}
+                          onChangeText={(text) => updateTransactionField(index, 'pricePerLiter', text)}
+                          keyboardType="numeric"
+                          placeholder="0"
+                        />
+                      </View>
+                    </View>
+                  </>
+                ) : (
+                  // Drum Transaction Fields
+                  <>
+                    <View style={styles.fieldRow}>
+                      <View style={styles.fieldGroup}>
+                        <Text style={styles.fieldLabel}>Drum Type</Text>
+                        <TouchableOpacity 
+                          style={styles.fieldDropdown}
+                          onPress={() => {
+                            const currentIndex = (['200L Drum', '100L Drum', '50L Drum', '25L Jerrycan'] as DrumType[]).indexOf(transaction.drumType as DrumType);
+                            const nextIndex = (currentIndex + 1) % 4;
+                            const drumTypes = ['200L Drum', '100L Drum', '50L Drum', '25L Jerrycan'];
+                            updateTransactionField(index, 'drumType', drumTypes[nextIndex]);
+                          }}
+                        >
+                          <Text style={styles.fieldText}>{transaction.drumType}</Text>
+                          <Ionicons name="chevron-down" size={16} color="#666" />
+                        </TouchableOpacity>
+                      </View>
+                      <View style={styles.fieldGroup}>
+                        <Text style={styles.fieldLabel}>Customer</Text>
+                        <TextInput
+                          style={styles.fieldInput}
+                          value={transaction.customer}
+                          onChangeText={(text) => updateTransactionField(index, 'customer', text)}
+                          placeholder="Walk-in Custom"
+                        />
+                      </View>
+                    </View>
+                    
+                    <View style={styles.fieldRow}>
+                      <View style={styles.fieldGroup}>
+                        <Text style={styles.fieldLabel}>Quantity (Drums)</Text>
+                        <TextInput
+                          style={styles.fieldInput}
+                          value={transaction.quantity}
+                          onChangeText={(text) => updateTransactionField(index, 'quantity', text)}
+                          keyboardType="numeric"
+                          placeholder="0"
+                        />
+                      </View>
+                      <View style={styles.fieldGroup}>
+                        <Text style={styles.fieldLabel}>Price/Drum (CDF)</Text>
+                        <TextInput
+                          style={styles.fieldInput}
+                          value={transaction.pricePerDrum}
+                          onChangeText={(text) => updateTransactionField(index, 'pricePerDrum', text)}
+                          keyboardType="numeric"
+                          placeholder="0"
+                        />
+                      </View>
+                    </View>
+                  </>
+                )}
+                
+                {/* Transaction Total */}
+                <View style={styles.transactionTotal}>
+                  <Text style={styles.transactionTotalLabel}>TOTAL:</Text>
+                  <Text style={styles.transactionTotalAmount}>
+                    {formatCurrency.CDF(
+                      ('pumpNumber' in transaction)
+                        ? (parseFloat(transaction.volumeLiters) || 0) * (parseFloat(transaction.pricePerLiter) || 0)
+                        : (parseInt(transaction.quantity) || 0) * (parseFloat(transaction.pricePerDrum) || 0)
+                    )}
+                  </Text>
+                </View>
+              </View>
+            ))}
+            
+            {/* Add Transaction Button */}
+            <View style={styles.addTransactionSection}>
+              <TouchableOpacity style={styles.addTransactionButton} onPress={() => addTransaction('pump')}>
+                <Ionicons name="add" size={24} color="#312C51" />
+                <Text style={styles.addTransactionText}>Add Pump Transaction</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.addTransactionButton} onPress={() => addTransaction('drum')}>
+                <Ionicons name="add" size={24} color="#312C51" />
+                <Text style={styles.addTransactionText}>Add Drum Transaction</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Summary */}
+          <View style={styles.summaryContainer}>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Subtotal</Text>
+              <View style={styles.summaryValue}>
+                <Text style={styles.summaryAmount}>{formatCurrency.CDF(calculateTotals(transactions).subtotal)}</Text>
+                <Text style={styles.summaryAmountUSD}>
+                  {formatCurrency.USD(calculateTotals(transactions).subtotal / 2850.50)}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Tax (0%)</Text>
+              <View style={styles.summaryValue}>
+                <Text style={styles.summaryAmount}>{formatCurrency.CDF(calculateTotals(transactions).tax)}</Text>
+                <Text style={styles.summaryAmountUSD}>
+                  {formatCurrency.USD(calculateTotals(transactions).tax / 2850.50)}
+                </Text>
+              </View>
+            </View>
+            <View style={[styles.summaryRow, styles.totalRow]}>
+              <Text style={styles.totalLabel}>TOTAL</Text>
+              <View style={styles.summaryValue}>
+                <Text style={styles.totalAmount}>{formatCurrency.CDF(calculateTotals(transactions).total)}</Text>
+                <Text style={styles.totalAmountUSD}>
+                  {formatCurrency.USD(calculateTotals(transactions).total / 2850.50)}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.exchangeRateText}>
+              Exchange Rate: 1 USD = {formatCurrency.CDF(2850.50)} (Rate: 0.00035078)
+            </Text>
+          </View>
+        </ScrollView>
+
+        {/* Footer Buttons */}
+        <View style={styles.footer}>
+          <TouchableOpacity 
+            style={styles.saveDraftButton}
+            onPress={handleSaveDraft}
+            disabled={loading}
+          >
+            <Text style={styles.saveDraftText}>Save Draft</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.submitButton}
+            onPress={handleSubmitBatch}
+            disabled={loading}
+          >
+            <Text style={styles.submitText}>Submit Batch</Text>
+          </TouchableOpacity>
+            <TouchableOpacity
+          style={styles.printButton}
+          onPress={handlePrint}
+          disabled={loading}
+          >
+            <Text style={styles.printText}>Print</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Date Picker Modal */}
+        <Modal visible={showDatePicker} transparent animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={styles.datePickerModal}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Select Date</Text>
+                <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                  <Ionicons name="close" size={24} color="#333" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.calendarHeader}>
+                <TouchableOpacity onPress={() => changeCalendarMonth(-1)}>
+                  <Ionicons name="chevron-back" size={24} color="#312C51" />
+                </TouchableOpacity>
+                <Text style={styles.calendarMonthYear}>
+                  {MONTHS[calendarMonth - 1]} {calendarYear}
+                </Text>
+                <TouchableOpacity onPress={() => changeCalendarMonth(1)}>
+                  <Ionicons name="chevron-forward" size={24} color="#312C51" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.calendarWeekDays}>
+                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
+                  <React.Fragment key={index}>
+                    <View style={styles.weekDayCell}>
+                      <Text style={styles.weekDayText}>{day}</Text>
+                    </View>
+                  </React.Fragment>
+                ))}
+              </View>
+              <FlatList
+                data={renderCalendar()}
+                numColumns={7}
+                keyExtractor={(item, index) => index.toString()}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={[
+                      styles.calendarDayCell,
+                      !item.empty && tempDate.day === item.day && tempDate.month === calendarMonth && tempDate.year === calendarYear && styles.selectedDayCell,
+                    ]}
+                    onPress={() => !item.empty && setTempDate({ ...tempDate, day: item.day })}
+                  >
+                    <Text style={[
+                      styles.calendarDayText,
+                      !item.empty && tempDate.day === item.day && tempDate.month === calendarMonth && tempDate.year === calendarYear && styles.selectedDayText,
+                    ]}>
+                      {item.day || ''}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                scrollEnabled={false}
+              />
+              <TouchableOpacity style={styles.applyDateButton} onPress={applyTempDate}>
+                <Text style={styles.applyDateText}>Apply Date</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      </SafeAreaView>
+    </View>
+  ;

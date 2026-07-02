@@ -29,7 +29,7 @@ interface SalesRecord {
   sale_date: string;
   created_at: string;
   station_name: string;
-  sale_type: 'pump' | 'drum';
+  sale_type: 'pump';
 }
 
 interface SalesSummary {
@@ -47,152 +47,198 @@ interface CashFlowData {
   shortExtra: number;
   totalExpenses: number;
   finalCashFlow: number;
+  openingCash: number;
 }
+
+const SalesRecordItem = memo(({ record }: { record: SalesRecord }) => (
+  <View style={styles.recordCard}>
+    <View style={styles.recordHeader}>
+      <View style={styles.recordInfo}>
+        <Text style={styles.fuelType}>{record.fuel_type}</Text>
+        <Text style={styles.saleType}>({record.sale_type})</Text>
+      </View>
+      <View style={styles.recordBadge}>
+        <Text style={[
+          styles.paymentBadge,
+          record.payment_method === 'cash' && styles.cashBadge,
+          record.payment_method === 'card' && styles.cardBadge,
+          record.payment_method === 'credit' && styles.creditBadge,
+        ]}>
+          {record.payment_method.toUpperCase()}
+        </Text>
+      </View>
+    </View>
+    <View style={styles.recordDetails}>
+      <View style={styles.recordColumn}>
+        <Text style={styles.recordLabel}>Litres</Text>
+        <Text style={styles.recordValue}>{record.volume_liters.toLocaleString()} L</Text>
+      </View>
+      <View style={styles.recordColumn}>
+        <Text style={styles.recordLabel}>Amount</Text>
+        <Text style={styles.recordAmount}>{formatCurrency.CDF(record.total_amount)}</Text>
+      </View>
+      <View style={styles.recordColumn}>
+        <Text style={styles.recordLabel}>Time</Text>
+        <Text style={styles.recordValue}>
+          {new Date(record.created_at).toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+          })}
+        </Text>
+      </View>
+    </View>
+  </View>
+));
 
 export default function SalesRecordsScreen() {
   const { appUser } = useAuth();
   const navigation = useNavigation();
-  const [salesRecords, setSalesRecords] = useState<SalesRecord[]>([]);
-  const [salesSummary, setSalesSummary] = useState<SalesSummary>({
-    totalAmount: 0,
-    totalPMSLitres: 0,
-    totalAGOLitres: 0,
-    cashSales: 0,
-    cardSales: 0,
-    creditSales: 0,
-  });
-  const [cashFlow, setCashFlow] = useState<CashFlowData>({
-    cashInHand: 0,
-    cashSales: 0,
-    shortExtra: 0,
-    totalExpenses: 0,
-    finalCashFlow: 0,
-  });
-  const [selectedStation, setSelectedStation] = useState('ISSIRO STATION');
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [previousFinalCash, setPreviousFinalCash] = useState(0);
-
-  const loadSalesData = useCallback(async () => {
-    try {
-      setLoading(true);
-      
-      const prevDate = new Date(selectedDate);
-      prevDate.setDate(prevDate.getDate() - 1);
-      const prevDateStr = prevDate.toISOString().split('T')[0];
-      
-      const { data: prevCashData } = await supabase
-        .from('daily_cash_flows')
-        .select('closing_cash')
-        .eq('sale_date', prevDateStr)
-        .eq('station_name', selectedStation)
-        .single();
-      
-      const prevFinal = prevCashData?.closing_cash || 0;
-      setPreviousFinalCash(prevFinal);
-      
-      // Fetch sales records for selected date and station
-      const { data: salesData, error: salesError } = await supabase
-        .from('daily_sales')
-        .select('*')
-        .eq('sale_date', selectedDate)
-        .eq('station_name', selectedStation)
-        .order('created_at', { ascending: false });
-
-      if (salesError) {
-        console.error('Error fetching sales:', salesError);
-        return;
-      }
-
-      const records: SalesRecord[] = (salesData || []).map(sale => ({
-        id: sale.id,
-        fuel_type: sale.fuel_type as 'PMS' | 'AGO',
-        volume_liters: sale.volume_liters || 0,
-        total_amount: sale.total_amount || 0,
-        payment_method: sale.payment_method as 'cash' | 'card' | 'credit',
-        sale_date: sale.sale_date,
-        created_at: sale.created_at,
-        station_name: sale.station_name,
-        sale_type: sale.sale_type as 'pump' | 'drum',
-      }));
-
-      setSalesRecords(records);
-
-      // Calculate sales summary
-      const summary: SalesSummary = {
+    const [salesRecords, setSalesRecords] = useState<SalesRecord[]>([]);
+    const [salesSummary, setSalesSummary] = useState<SalesSummary>({
         totalAmount: 0,
         totalPMSLitres: 0,
         totalAGOLitres: 0,
         cashSales: 0,
         cardSales: 0,
         creditSales: 0,
-      };
+    });
+    const [cashFlow, setCashFlow] = useState<CashFlowData>({
+        cashInHand: 0,
+        cashSales: 0,
+        shortExtra: 0,
+        totalExpenses: 0,
+        finalCashFlow: 0,
+        openingCash: 0,
+    });
+    const [selectedStation, setSelectedStation] = useState('ISSIRO STATION');
+    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+    const [previousFinalCash, setPreviousFinalCash] = useState(0);
 
-      records.forEach(record => {
-        summary.totalAmount += record.total_amount;
-        if (record.fuel_type === 'PMS') {
-          summary.totalPMSLitres += record.volume_liters;
-        } else if (record.fuel_type === 'AGO') {
-          summary.totalAGOLitres += record.volume_liters;
-        }
+   const loadSalesData = useCallback(async () => {
+     try {
+       setLoading(true);
+       
+       const prevDate = new Date(selectedDate);
+       prevDate.setDate(prevDate.getDate() - 1);
+       const prevDateStr = prevDate.toISOString().split('T')[0];
+       
+       const { data: prevCashData } = await supabase
+         .from('daily_cash_flows')
+         .select('closing_cash')
+         .eq('sale_date', prevDateStr)
+         .eq('station_name', selectedStation)
+         .single();
+       
+       const prevFinal = prevCashData?.closing_cash || 0;
+       setPreviousFinalCash(prevFinal);
+       
+       // Fetch sales records for selected date and station
+       const { data: salesData, error: salesError } = await supabase
+         .from('daily_sales')
+         .select('*')
+         .eq('sale_date', selectedDate)
+         .eq('station_name', selectedStation)
+         .order('created_at', { ascending: false });
 
-        if (record.payment_method === 'cash') {
-          summary.cashSales += record.total_amount;
-        } else if (record.payment_method === 'card') {
-          summary.cardSales += record.total_amount;
-        } else if (record.payment_method === 'credit') {
-          summary.creditSales += record.total_amount;
-        }
-      });
+       if (salesError) {
+         console.error('Error fetching sales:', salesError);
+         return;
+       }
 
-      setSalesSummary(summary);
+       const records: SalesRecord[] = (salesData || []).map(sale => ({
+         id: sale.id,
+         fuel_type: sale.fuel_type as 'PMS' | 'AGO',
+         volume_liters: sale.volume_liters || 0,
+         total_amount: sale.total_amount || 0,
+         payment_method: sale.payment_method as 'cash' | 'card' | 'credit',
+         sale_date: sale.sale_date,
+         created_at: sale.created_at,
+         station_name: sale.station_name,
+         sale_type: 'pump' as const,
+       }));
 
-      // Fetch expenses for the selected date
-      const { data: expensesData, error: expensesError } = await supabase
-        .from('expenses')
-        .select('amount')
-        .eq('expense_date', selectedDate);
+       setSalesRecords(records);
 
-      const totalExpenses = expensesData?.reduce((sum, exp) => sum + (exp.amount || 0), 0) || 0;
+       // Calculate sales summary
+       const summary: SalesSummary = {
+         totalAmount: 0,
+         totalPMSLitres: 0,
+         totalAGOLitres: 0,
+         cashSales: 0,
+         cardSales: 0,
+         creditSales: 0,
+       };
 
-      // Update cash flow - include previous day's closing cash as opening balance
-      setCashFlow(prev => {
-        const openingCash = prevFinal;
-        const cashInHand = openingCash + summary.cashSales;
-        return {
-          ...prev,
-          cashInHand,
-          cashSales: summary.cashSales,
-          totalExpenses,
-          shortExtra: cashInHand - summary.cashSales - totalExpenses,
-          finalCashFlow: openingCash + summary.cashSales - totalExpenses,
-        };
-      });
+       records.forEach(record => {
+         summary.totalAmount += record.total_amount;
+         if (record.fuel_type === 'PMS') {
+           summary.totalPMSLitres += record.volume_liters;
+         } else if (record.fuel_type === 'AGO') {
+           summary.totalAGOLitres += record.volume_liters;
+         }
 
-    } catch (error) {
-      console.error('Error loading sales data:', error);
-      Alert.alert('Error', 'Failed to load sales data');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [selectedDate, selectedStation]);
+         if (record.payment_method === 'cash') {
+           summary.cashSales += record.total_amount;
+         } else if (record.payment_method === 'card') {
+           summary.cardSales += record.total_amount;
+         } else if (record.payment_method === 'credit') {
+           summary.creditSales += record.total_amount;
+         }
+       });
+
+       setSalesSummary(summary);
+
+       // Fetch expenses for the selected date
+       const { data: expensesData, error: expensesError } = await supabase
+         .from('expenses')
+         .select('amount')
+         .eq('expense_date', selectedDate);
+
+       const totalExpenses = expensesData?.reduce((sum, exp) => sum + (exp.amount || 0), 0) || 0;
+
+       // Update cash flow - include previous day's closing cash as opening balance
+       setCashFlow(prev => {
+         const openingCash = prevFinal;
+         const expectedCash = openingCash + summary.cashSales - totalExpenses;
+         return {
+           ...prev,
+           cashInHand: expectedCash, // Set to expected cash initially
+           cashSales: summary.cashSales,
+           totalExpenses,
+           shortExtra: 0, // Will be updated when user enters actual cash
+           finalCashFlow: expectedCash,
+           openingCash: openingCash,
+         };
+       });
+
+     } catch (error) {
+       console.error('Error loading sales data:', error);
+       Alert.alert('Error', 'Failed to load sales data');
+     } finally {
+       setLoading(false);
+       setRefreshing(false);
+     }
+   }, [selectedDate, selectedStation]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     loadSalesData();
   }, [loadSalesData]);
 
-  const handleCashInHandChange = (value: string) => {
-    const cashInHand = parseFloat(value) || 0;
-    setCashFlow(prev => ({
-      ...prev,
-      cashInHand,
-      shortExtra: cashInHand - prev.cashSales,
-      finalCashFlow: cashInHand - prev.cashSales - prev.totalExpenses,
-    }));
-  };
+   const handleCashInHandChange = (value: string) => {
+     const cashInHand = parseFloat(value) || 0;
+     setCashFlow(prev => {
+       const expectedCash = prev.openingCash + prev.cashSales - prev.totalExpenses;
+       return {
+         ...prev,
+         cashInHand,
+         shortExtra: cashInHand - expectedCash,
+         finalCashFlow: expectedCash,
+       };
+     });
+   };
 
   const handleStationChange = () => {
     const currentIndex = STATIONS.indexOf(selectedStation);
@@ -200,63 +246,13 @@ export default function SalesRecordsScreen() {
     setSelectedStation(STATIONS[nextIndex]);
   };
 
-  useEffect(() => {
-    loadSalesData();
-  }, [loadSalesData]);
+   useEffect(() => {
+     loadSalesData();
+   }, [loadSalesData]);
 
-  const getAvailableStations = (): string[] => {
-    if (appUser?.role === 'admin') {
-      return STATIONS;
-    }
-    if (appUser?.station_id) {
-      const stationName = STATIONS.find(station =>
-        station.toLowerCase().replace(/\s+/g, '_') === appUser.station_id?.toLowerCase()
-      );
-      return stationName ? [stationName] : STATIONS;
-    }
-    return STATIONS;
-  };
-
-  // Memoized sales record component
-const SalesRecordItem = memo(({ record }: { record: SalesRecord }) => (
-    <View style={styles.recordCard}>
-      <View style={styles.recordHeader}>
-        <View style={styles.recordInfo}>
-          <Text style={styles.fuelType}>{record.fuel_type}</Text>
-          <Text style={styles.saleType}>({record.sale_type})</Text>
-        </View>
-        <View style={styles.recordBadge}>
-          <Text style={[
-            styles.paymentBadge,
-            record.payment_method === 'cash' && styles.cashBadge,
-            record.payment_method === 'card' && styles.cardBadge,
-            record.payment_method === 'credit' && styles.creditBadge,
-          ]}>
-            {record.payment_method.toUpperCase()}
-          </Text>
-        </View>
-      </View>
-      <View style={styles.recordDetails}>
-        <View style={styles.recordColumn}>
-          <Text style={styles.recordLabel}>Litres</Text>
-          <Text style={styles.recordValue}>{record.volume_liters.toLocaleString()} L</Text>
-        </View>
-        <View style={styles.recordColumn}>
-          <Text style={styles.recordLabel}>Amount</Text>
-          <Text style={styles.recordAmount}>{formatCurrency.CDF(record.total_amount)}</Text>
-        </View>
-        <View style={styles.recordColumn}>
-          <Text style={styles.recordLabel}>Time</Text>
-          <Text style={styles.recordValue}>
-            {new Date(record.created_at).toLocaleTimeString('en-US', {
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
-          </Text>
-        </View>
-      </View>
-    </View>
-  ));
+  const renderSalesRecordItem = useCallback(({ item }: { item: SalesRecord }) => (
+    <SalesRecordItem record={item} />
+  ), []);
 
   if (loading) {
     return (
@@ -270,10 +266,6 @@ const SalesRecordItem = memo(({ record }: { record: SalesRecord }) => (
       </LinearGradient>
     );
   }
-
-  const renderSalesRecordItem = useCallback(({ item }: { item: SalesRecord }) => (
-    <SalesRecordItem record={item} />
-  ), []);
 
   return (
     <LinearGradient colors={['#312C51', '#48426D']} style={styles.container}>
@@ -407,26 +399,25 @@ const SalesRecordItem = memo(({ record }: { record: SalesRecord }) => (
             </TouchableOpacity>
           </View>
 
-          {/* Sales Records List */}
-          <View style={styles.recordsContainer}>
-            <Text style={styles.sectionTitle}>Sales Records ({salesRecords.length})</Text>
-            {salesRecords.length === 0 ? (
-              <View style={styles.noRecordsContainer}>
-                <Ionicons name="document-text-outline" size={48} color="#666" />
-                <Text style={styles.noRecordsText}>No sales records for this date</Text>
-                <Text style={styles.noRecordsSubtext}>Records will appear here after sales are entered</Text>
-              </View>
-            ) : (
-              <FlashList
-                data={salesRecords as any}
-                renderItem={renderSalesRecordItem as any}
-                estimatedItemSize={100}
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                contentContainerStyle={styles.flashListContent}
-              />
-            )}
-          </View>
+           {/* Sales Records List */}
+           <View style={styles.recordsContainer}>
+             <Text style={styles.sectionTitle}>Sales Records ({salesRecords.length})</Text>
+             {salesRecords.length === 0 ? (
+                 <View style={styles.noRecordsContainer}>
+                   <Ionicons name="document-text-outline" size={48} color="#666" />
+                   <Text style={styles.noRecordsText}>No sales records for this date</Text>
+                   <Text style={styles.noRecordsSubtext}>Records will appear here after sales are entered</Text>
+                 </View>
+               ) : (
+                 <FlashList<SalesRecord>
+                   data={salesRecords}
+                   renderItem={renderSalesRecordItem}
+                   refreshing={refreshing}
+                   onRefresh={onRefresh}
+                   contentContainerStyle={styles.flashListContent}
+                 />
+               )}
+           </View>
         </View>
       </SafeAreaView>
     </LinearGradient>

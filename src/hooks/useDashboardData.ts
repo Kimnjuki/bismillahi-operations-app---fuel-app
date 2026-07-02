@@ -87,7 +87,7 @@ export const useDashboardData = (
     queryFn: () => fetchDashboardStats(appUser?.id),
     staleTime: 2 * 60 * 1000, // 2 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes (was cacheTime in v4)
-    enabled: !!appUser?.id,
+    enabled: true, // Always enabled - fetchDashboardStats handles undefined userId
     ...options,
   });
 
@@ -100,7 +100,14 @@ export const useDashboardData = (
   });
 
   return {
-    stats: statsQuery.data,
+    stats: statsQuery.data || {
+      todaySales: 0,
+      todayExpenses: 0,
+      stockAlerts: 0,
+      pendingTransfers: 0,
+      monthlyGrowth: 0,
+      totalTransactions: 0,
+    },
     statsLoading: statsQuery.isLoading,
     statsError: statsQuery.error,
     notifications: notificationsQuery.data || [],

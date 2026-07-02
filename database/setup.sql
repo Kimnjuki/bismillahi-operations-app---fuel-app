@@ -135,26 +135,21 @@ CREATE TABLE IF NOT EXISTS expense_categories (
 
 -- Insert default expense categories
 INSERT INTO expense_categories (name, description) VALUES
-('Fuel', 'Petrol, diesel, and other fuel expenses'),
-('Maintenance', 'Vehicle and equipment maintenance'),
-('Repairs', 'Equipment and facility repairs'),
-('Utilities', 'Electricity, water, internet bills'),
-('Rent', 'Office and facility rent'),
-('Salaries', 'Staff salaries and wages'),
-('Insurance', 'Vehicle and property insurance'),
-('Licenses', 'Business licenses and permits'),
-('Marketing', 'Advertising and promotional expenses'),
-('Office Supplies', 'Stationery and office materials'),
-('Communication', 'Phone bills and communication services'),
-('Transportation', 'Travel and transportation costs'),
-('Professional Services', 'Legal, accounting, consulting fees'),
-('Training', 'Staff training and development'),
+('Generator', 'Generator fuel, maintenance, and related expenses'),
+('Workers'' fare and lunch', 'Transportation and meal allowances for workers'),
 ('Security', 'Security services and equipment'),
-('Cleaning', 'Cleaning supplies and services'),
-('Medical', 'Medical expenses and health insurance'),
-('Bank Charges', 'Bank fees and transaction charges'),
-('Miscellaneous', 'Other miscellaneous expenses'),
-('Taxes', 'Tax payments and obligations')
+('Transport', 'General transportation and logistics expenses'),
+('Government expenses', 'Government fees, taxes, and compliance costs'),
+('Offloading expenses', 'Loading, unloading, and handling expenses'),
+('Medical', 'Medical and health-related expenses'),
+('Travel expenses', 'Business travel and accommodation costs'),
+('Communication', 'Phone, internet, and communication services'),
+('Salary', 'Employee salaries and wages'),
+('Stationaries', 'Office stationery and supplies'),
+('Discount', 'Discounts, rebates, and allowances'),
+('Sadaqa', 'Charitable donations and religious contributions'),
+('Repair and Maintenance', 'Equipment and facility repair and maintenance'),
+('Rent', 'Facility and equipment rental expenses')
 ON CONFLICT (name) DO NOTHING;
 
 -- Create indexes for better performance

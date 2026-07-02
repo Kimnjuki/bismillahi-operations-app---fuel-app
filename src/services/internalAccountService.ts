@@ -1,28 +1,5 @@
 import { supabase } from '../config/supabase';
-import { ApiResponse } from '../types';
-
-export interface InternalAccount {
-  id: string;
-  account_name: string;
-  account_code: string;
-  account_type: 'cash' | 'bank' | 'petty_cash' | 'fuel_account' | 'operations';
-  station_id?: string;
-  station_name?: string;
-  balance: number;
-  currency: 'USD' | 'CDF';
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface Station {
-  id: string;
-  station_name: string;
-  station_code: string;
-  location: string;
-  is_active: boolean;
-  created_at: string;
-}
+import { ApiResponse, InternalAccount, Station, InternalAccountType } from '../types';
 
 class InternalAccountService {
   // Get all internal accounts
@@ -158,190 +135,82 @@ class InternalAccountService {
   // Get sample data for demo purposes
   getSampleAccounts(): InternalAccount[] {
     return [
-      {
-        id: '1',
-        account_name: 'BISMILLAHI - ISSIRO STATION (CDF)',
-        account_code: 'ISS_CDF',
-        account_type: 'cash',
-        station_id: '1',
-        station_name: 'ISSIRO STATION',
-        balance: 2500000,
-        currency: 'CDF',
-        is_active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      {
-        id: '2',
-        account_name: 'BISMILLAHI - ISSIRO STATION (USD)',
-        account_code: 'ISS_USD',
-        account_type: 'bank',
-        station_id: '1',
-        station_name: 'ISSIRO STATION',
-        balance: 150000,
-        currency: 'USD',
-        is_active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      {
-        id: '3',
-        account_name: 'Personal Account (USD)',
-        account_code: 'PERS_USD',
-        account_type: 'bank',
-        station_id: '1',
-        station_name: 'ISSIRO STATION',
-        balance: 50000,
-        currency: 'USD',
-        is_active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      {
-        id: '4',
-        account_name: 'DEPOT ISSIRO - Operations (USD)',
-        account_code: 'DEP_OPS',
-        account_type: 'operations',
-        station_id: '2',
-        station_name: 'DEPOT ISSIRO',
-        balance: 200000,
-        currency: 'USD',
-        is_active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      {
-        id: '5',
-        account_name: 'RUNGU STATION - Fuel Account (USD)',
-        account_code: 'RUN_FUEL',
-        account_type: 'fuel_account',
-        station_id: '3',
-        station_name: 'RUNGU STATION',
-        balance: 120000,
-        currency: 'USD',
-        is_active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      {
-        id: '6',
-        account_name: 'DUNGU STATION - Cash Account (USD)',
-        account_code: 'DUN_CASH',
-        account_type: 'cash',
-        station_id: '4',
-        station_name: 'DUNGU STATION',
-        balance: 85000,
-        currency: 'USD',
-        is_active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      {
-        id: '7',
-        account_name: 'DURBA STATION - Bank Account (USD)',
-        account_code: 'DUR_BANK',
-        account_type: 'bank',
-        station_id: '5',
-        station_name: 'DURBA STATION',
-        balance: 180000,
-        currency: 'USD',
-        is_active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      {
-        id: '8',
-        account_name: 'NIANGARA STATION - Operations (USD)',
-        account_code: 'NIA_OPS',
-        account_type: 'operations',
-        station_id: '6',
-        station_name: 'NIANGARA STATION',
-        balance: 95000,
-        currency: 'USD',
-        is_active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      {
-        id: '9',
-        account_name: 'Main Petty Cash (USD)',
-        account_code: 'MAIN_PETTY',
-        account_type: 'petty_cash',
-        station_id: '1',
-        station_name: 'ISSIRO STATION',
-        balance: 15000,
-        currency: 'USD',
-        is_active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      {
-        id: '10',
-        account_name: 'Business Operations (CDF)',
-        account_code: 'BUS_OPS_CDF',
-        account_type: 'operations',
-        station_id: '1',
-        station_name: 'ISSIRO STATION',
-        balance: 5000000,
-        currency: 'CDF',
-        is_active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
+      { id: 'iss-cdf-ops', account_name: 'ISSIRO STATION',   account_code: 'ISS001_OPS_CDF', account_type: 'operating', station_id: '1', station_name: 'ISSIRO STATION',    balance: 12500000, currency: 'CDF', is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+      { id: 'iss-usd-ops', account_name: 'ISSIRO STATION',   account_code: 'ISS001_OPS_USD', account_type: 'operating', station_id: '1', station_name: 'ISSIRO STATION',    balance: 45000,    currency: 'USD', is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+      { id: 'dep-cdf-ops', account_name: 'DEPOT ISSIRO',     account_code: 'DEP001_OPS_CDF', account_type: 'operating', station_id: '2', station_name: 'DEPOT ISSIRO',      balance: 8250000,  currency: 'CDF', is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+      { id: 'dep-usd-ops', account_name: 'DEPOT ISSIRO',     account_code: 'DEP001_OPS_USD', account_type: 'operating', station_id: '2', station_name: 'DEPOT ISSIRO',      balance: 38000,    currency: 'USD', is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+      { id: 'run-cdf-ops', account_name: 'RUNGU STATION',    account_code: 'RUN001_OPS_CDF', account_type: 'operating', station_id: '3', station_name: 'RUNGU STATION',     balance: 5640000,  currency: 'CDF', is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+      { id: 'run-usd-ops', account_name: 'RUNGU STATION',    account_code: 'RUN001_OPS_USD', account_type: 'operating', station_id: '3', station_name: 'RUNGU STATION',     balance: 22000,    currency: 'USD', is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+      { id: 'dur-cdf-ops', account_name: 'DURBA STATION',    account_code: 'DUR001_OPS_CDF', account_type: 'operating', station_id: '4', station_name: 'DURBA STATION',     balance: 7380000,  currency: 'CDF', is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+      { id: 'dur-usd-ops', account_name: 'DURBA STATION',    account_code: 'DUR001_OPS_USD', account_type: 'operating', station_id: '4', station_name: 'DURBA STATION',     balance: 31000,    currency: 'USD', is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+      { id: 'dun-cdf-ops', account_name: 'DUNGU STATION',    account_code: 'DUN001_OPS_CDF', account_type: 'operating', station_id: '5', station_name: 'DUNGU STATION',     balance: 4100000,  currency: 'CDF', is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+      { id: 'dun-usd-ops', account_name: 'DUNGU STATION',    account_code: 'DUN001_OPS_USD', account_type: 'operating', station_id: '5', station_name: 'DUNGU STATION',     balance: 18000,    currency: 'USD', is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+      { id: 'nia-cdf-ops', account_name: 'NIANGARA STATION', account_code: 'NIA001_OPS_CDF', account_type: 'operating', station_id: '6', station_name: 'NIANGARA STATION',  balance: 2900000,  currency: 'CDF', is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+      { id: 'nia-usd-ops', account_name: 'NIANGARA STATION', account_code: 'NIA001_OPS_USD', account_type: 'operating', station_id: '6', station_name: 'NIANGARA STATION',  balance: 12000,    currency: 'USD', is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+      { id: 'trn-cdf-01', account_name: 'ON TRANSIT',       account_code: 'TRANSIT_CDF',    account_type: 'transit',   station_id: undefined, station_name: undefined,        balance: 3400000,  currency: 'CDF', is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+      { id: 'trn-usd-01', account_name: 'ON TRANSIT',       account_code: 'TRANSIT_USD',    account_type: 'transit',   station_id: undefined, station_name: undefined,        balance: 15000,    currency: 'USD', is_active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
     ];
   }
 
   getSampleStations(): Station[] {
     return [
-      {
-        id: '1',
-        station_name: 'ISSIRO STATION',
-        station_code: 'ISS001',
-        location: 'Issiro, DRC',
-        is_active: true,
-        created_at: new Date().toISOString(),
-      },
-      {
-        id: '2',
-        station_name: 'DEPOT ISSIRO',
-        station_code: 'DEP001',
-        location: 'Issiro Depot, DRC',
-        is_active: true,
-        created_at: new Date().toISOString(),
-      },
-      {
-        id: '3',
-        station_name: 'RUNGU STATION',
-        station_code: 'RUN001',
-        location: 'Rungu, DRC',
-        is_active: true,
-        created_at: new Date().toISOString(),
-      },
-      {
-        id: '4',
-        station_name: 'DURBA STATION',
-        station_code: 'DUR001',
-        location: 'Durba, DRC',
-        is_active: true,
-        created_at: new Date().toISOString(),
-      },
-      {
-        id: '5',
-        station_name: 'DUNGU STATION',
-        station_code: 'DUN001',
-        location: 'Dungu, DRC',
-        is_active: true,
-        created_at: new Date().toISOString(),
-      },
-      {
-        id: '6',
-        station_name: 'NIANGARA STATION',
-        station_code: 'NIA001',
-        location: 'Niangara, DRC',
-        is_active: true,
-        created_at: new Date().toISOString(),
-      },
+      { id: '1', station_name: 'ISSIRO STATION',    station_code: 'ISS001', location: 'Issiro, DRC',      is_active: true, created_at: new Date().toISOString() },
+      { id: '2', station_name: 'DEPOT ISSIRO',      station_code: 'DEP001', location: 'Issiro Depot, DRC', is_active: true, created_at: new Date().toISOString() },
+      { id: '3', station_name: 'RUNGU STATION',     station_code: 'RUN001', location: 'Rungu, DRC',        is_active: true, created_at: new Date().toISOString() },
+      { id: '4', station_name: 'DURBA STATION',     station_code: 'DUR001', location: 'Durba, DRC',        is_active: true, created_at: new Date().toISOString() },
+      { id: '5', station_name: 'DUNGU STATION',     station_code: 'DUN001', location: 'Dungu, DRC',        is_active: true, created_at: new Date().toISOString() },
+      { id: '6', station_name: 'NIANGARA STATION',  station_code: 'NIA001', location: 'Niangara, DRC',     is_active: true, created_at: new Date().toISOString() },
     ];
+  }
+
+  async createAccount(account: Omit<InternalAccount, 'id' | 'created_at' | 'updated_at' | 'created_by'>): Promise<ApiResponse<InternalAccount>> {
+    try {
+      const { data, error } = await supabase
+        .from('internal_accounts')
+        .insert([{
+          account_name: account.account_name,
+          account_code: account.account_code,
+          account_type: account.account_type,
+          station_id: account.station_id,
+          balance: account.balance,
+          currency: account.currency,
+          is_active: account.is_active,
+          created_by: '',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      return { data, error: null, success: true };
+    } catch (error) {
+      console.error('Error creating account:', error);
+      return { data: null, error: error instanceof Error ? error.message : 'Unknown error', success: false };
+    }
+  }
+
+  async updateAccount(id: string, updates: Partial<InternalAccount>): Promise<ApiResponse<InternalAccount>> {
+    try {
+      const { data, error } = await supabase
+        .from('internal_accounts')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      return { data, error: null, success: true };
+    } catch (error) {
+      console.error('Error updating account:', error);
+      return { data: null, error: error instanceof Error ? error.message : 'Unknown error', success: false };
+    }
+  }
+
+  async deactivateAccount(id: string): Promise<ApiResponse<boolean>> {
+    return this.updateAccount(id, { is_active: false }).then(r => ({ ...r, data: r.success }));
   }
 }
 

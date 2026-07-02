@@ -40,7 +40,7 @@ interface SalesReceipt {
 }
 
 const FUEL_TYPES = ['PMS', 'AGO'];
-const PAYMENT_METHODS = ['Cash', 'Card', 'Credit'];
+const PAYMENT_METHODS = ['cash', 'card', 'credit'];
 const CUSTOMERS = ['Walk-in Custom', 'Regular Customer', 'Corporate Client'];
 const STATIONS = ['ISSIRO STATION', 'DEPOT ISSIRO', 'RUNGU STATION', 'DUNGU STATION', 'DURBA STATION', 'NIANGARA STATION'];
 const DRUM_STATIONS = ['DEPOT ISSIRO', 'DUNGU STATION'];
@@ -166,7 +166,7 @@ export default function UnifiedSalesReceiptScreen() {
           .from('daily_sales')
           .insert({
             sale_type: item.itemType,
-            fuel_type: item.itemName,  // Use 'PMS', 'AGO', 'DPK' directly
+             fuel_type: item.itemName,  // Use 'PMS', 'AGO' directly
             station_name: receipt.station,
             pump_number: item.itemType === 'pump' ? 1 : null,
             volume_liters: item.itemType === 'pump' ? item.quantity : null,

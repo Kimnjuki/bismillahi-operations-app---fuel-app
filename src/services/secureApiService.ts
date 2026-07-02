@@ -2,6 +2,39 @@ import { supabase } from '../config/supabase';
 import { securityMiddleware, ApiRequest, ApiResponse } from './securityMiddleware';
 import { securityService } from './securityService';
 
+const ALLOWED_TABLES = new Set([
+  'pump_sales',
+  'drum_sales',
+  'stock_items',
+  'stock_variances',
+  'expenses',
+  'users',
+  'reports',
+  'notifications',
+  'security_events',
+  'security_metrics',
+  'fuel_deliveries',
+  'transporters',
+  'stations',
+  'station_settings',
+  'tax_payments',
+  'truck_transactions',
+  'fuel_stock',
+  'internal_accounts',
+  'daily_sales',
+  'stock_levels',
+  'daily_stock_transactions',
+  'tanks',
+  'dipping_readings',
+  'pump_readings',
+  'pumps',
+  'account_receivables',
+  'account_payables',
+  'account_transactions',
+  'creditors',
+  'suppliers',
+]);
+
 // Secure API service class
 class SecureApiService {
   // Make secure API request
@@ -81,6 +114,21 @@ class SecureApiService {
     const requestData = sanitizedData || data;
 
     try {
+      const baseTable = url.split('/')[0];
+      if (!ALLOWED_TABLES.has(baseTable)) {
+        await securityService.logSecurityEvent({
+          eventType: 'SECURITY_VIOLATION',
+          description: `Blocked request to unauthorized table: ${url}`,
+          severity: 'HIGH',
+          metadata: { userId: request.userId, url, method },
+        });
+        return {
+          data: null,
+          error: 'Access denied: unauthorized resource',
+          status: 403,
+        };
+      }
+
       let response: any;
 
       switch (method.toUpperCase()) {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   StyleSheet,
@@ -8,6 +8,10 @@ import {
   SafeAreaView,
   Dimensions,
   RefreshControl,
+  Modal,
+  FlatList,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,7 +19,6 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../config/supabase';
 import { formatCurrency } from '../constants/currency';
-import { EXPENSE_CATEGORIES } from '../constants/expenseCategories';
 import { LineChart, BarChart, ProgressChart } from '../components/ChartComponents';
 
 const { width } = Dimensions.get('window');
@@ -27,6 +30,7 @@ interface AnalyticsData {
     changePercent: number;
     trend: 'up' | 'down';
     chartData: Array<{ label: string; value: number; color: string }>;
+    average: number;
   };
   expenseDistribution: {
     total: number;
@@ -34,6 +38,7 @@ interface AnalyticsData {
     changePercent: number;
     trend: 'up' | 'down';
     chartData: Array<{ label: string; value: number; color: string }>;
+    average: number;
   };
   stockVariance: {
     total: number;
@@ -69,29 +74,31 @@ export default function AnalyticsScreen() {
   const navigation = useNavigation();
   const [selectedStation, setSelectedStation] = useState('All Stations');
   const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>('Monthly');
-  const [analyticsData, setAnalyticsData] = useState<AnalyticsData>({
-    salesTrends: {
-      total: 0,
-      change: 0,
-      changePercent: 0,
-      trend: 'up',
-      chartData: [],
-    },
-    expenseDistribution: {
-      total: 0,
-      change: 0,
-      changePercent: 0,
-      trend: 'down',
-      chartData: [],
-    },
-    stockVariance: {
-      total: 0,
-      change: 0,
-      changePercent: 0,
-      trend: 'up',
-      chartData: [],
-    },
-  });
+   const [analyticsData, setAnalyticsData] = useState<AnalyticsData>({
+     salesTrends: {
+       total: 0,
+       change: 0,
+       changePercent: 0,
+       trend: 'up',
+       chartData: [],
+       average: 0,
+     },
+     expenseDistribution: {
+       total: 0,
+       change: 0,
+       changePercent: 0,
+       trend: 'down',
+       chartData: [],
+       average: 0,
+     },
+     stockVariance: {
+       total: 0,
+       change: 0,
+       changePercent: 0,
+       trend: 'up',
+       chartData: [],
+     },
+   });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -124,150 +131,237 @@ export default function AnalyticsScreen() {
     };
   };
 
-  const getPeriodBuckets = (period: TimePeriod, saleDate: string): string => {
-    const date = new Date(saleDate);
-    
-    switch (period) {
-      case 'Daily':
-        return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-      case 'Weekly': {
-        const weekStart = new Date(date);
-        weekStart.setDate(date.getDate() - date.getDay());
-        return `Week of ${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
-      }
-      case 'Monthly':
-        return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-      case 'Quarterly': {
-        const quarter = Math.floor(date.getMonth() / 3) + 1;
-        return `Q${quarter} ${date.getFullYear()}`;
-      }
-      default:
-        return saleDate;
-    }
-  };
+   const getPeriodBuckets = (period: TimePeriod, saleDate: string): string => {
+     const date = new Date(saleDate);
+     
+     switch (period) {
+       case 'Daily':
+         return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+       case 'Weekly': {
+         const weekStart = new Date(date);
+         weekStart.setDate(date.getDate() - date.getDay());
+         return `Week of ${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+       }
+       case 'Monthly':
+         return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+       case 'Quarterly': {
+         const quarter = Math.floor(date.getMonth() / 3) + 1;
+         return `Q${quarter} ${date.getFullYear()}`;
+       }
+       default:
+         return saleDate;
+     }
+   };
 
-  const loadAnalyticsData = useCallback(async () => {
-    try {
-      setLoading(true);
-      
-      const dateRange = getDateRangeForPeriod(selectedPeriod);
-      const stationFilter = selectedStation !== 'All Stations' ? { station_name: selectedStation } : {};
-      
-      const { data: salesData } = await supabase
-        .from('daily_sales')
-        .select('total_amount, sale_date, station_name')
-        .gte('sale_date', dateRange.start)
-        .lte('sale_date', dateRange.end)
-        .order('sale_date', { ascending: true });
+   // Helper to get date range for a period ending at a given date
+   const getDateRangeForPeriodAndEndDate = (period: TimePeriod, endDate: Date) => {
+     const startDate = new Date(endDate);
+     switch (period) {
+       case 'Daily':
+         startDate.setDate(endDate.getDate() - 6);
+         break;
+       case 'Weekly':
+         startDate.setDate(endDate.getDate() - 27);
+         break;
+       case 'Monthly':
+         startDate.setMonth(endDate.getMonth() - 3);
+         break;
+       case 'Quarterly':
+         startDate.setMonth(endDate.getMonth() - 12);
+         break;
+     }
+     startDate.setHours(0, 0, 0, 0);
+     endDate.setHours(23, 59, 59, 999);
+     return {
+       start: startDate.toISOString().split('T')[0],
+       end: endDate.toISOString().split('T')[0],
+     };
+   };
 
-      const { data: expensesData } = await supabase
-        .from('expenses')
-        .select('category, amount, expense_date')
-        .gte('expense_date', dateRange.start)
-        .lte('expense_date', dateRange.end)
-        .order('expense_date', { ascending: true });
+   // Helper to calculate number of days in a date range
+   const getDaysInPeriod = (dateRange: { start: string; end: string }) => {
+     const startDate = new Date(dateRange.start);
+     const endDate = new Date(dateRange.end);
+     return Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 3600 * 24)) + 1;
+   };
 
-      const { data: stockData } = await supabase
-        .from('stock_items')
-        .select('item_name, current_stock');
-
-      let totalSales = 0;
-      const salesBuckets: Record<string, { cdf: number; count: number }> = {};
-      
-      if (salesData) {
-        salesData.forEach(sale => {
-          totalSales += sale.total_amount || 0;
-          const bucket = getPeriodBuckets(selectedPeriod, sale.sale_date);
-          if (!salesBuckets[bucket]) {
-            salesBuckets[bucket] = { cdf: 0, count: 0 };
-          }
-          salesBuckets[bucket].cdf += sale.total_amount || 0;
-          salesBuckets[bucket].count += 1;
-        });
-      }
-
-      const salesChartData = Object.entries(salesBuckets)
-        .map(([label, data]) => ({
-          label: label.length > 20 ? label.substring(0, 18) + '...' : label,
-          value: data.cdf,
-          color: '#F0C38E',
-        }))
-        .sort((a, b) => a.label.localeCompare(b.label))
-        .slice(-6);
-
-      let totalExpenses = 0;
-      const expenseCategories: Record<string, number> = {};
-      
-      if (expensesData) {
-        expensesData.forEach(expense => {
-          totalExpenses += expense.amount || 0;
-          expenseCategories[expense.category] = (expenseCategories[expense.category] || 0) + (expense.amount || 0);
-        });
-      }
-
-      const topCategories = Object.entries(expenseCategories)
-        .map(([name, amount]) => ({
-          name,
-          amount,
-          percentage: totalExpenses > 0 ? (amount / totalExpenses) * 100 : 0,
-        }))
-        .sort((a, b) => b.amount - a.amount)
-        .slice(0, 4);
-
-      const expenseChartData = topCategories.map((cat, index) => ({
-        label: cat.name.length > 12 ? cat.name.substring(0, 10) + '...' : cat.name,
-        value: cat.percentage,
-        color: ['#F0C38E', '#E8B86E', '#D4A055', '#C89045'][index] || '#F0C38E',
-      }));
-
-      let pmsStock = 0;
-      let agoStock = 0;
-      if (stockData) {
-        stockData.forEach(stock => {
-          if (stock.item_name === 'PMS') pmsStock = stock.current_stock || 0;
-          if (stock.item_name === 'AGO') agoStock = stock.current_stock || 0;
-        });
-      }
-
-      const stockVarianceData = [
-        { label: 'PMS', value: pmsStock > 0 ? Math.min(100, (pmsStock / (pmsStock + agoStock || 1)) * 100) : 50, color: '#F0C38E' },
-        { label: 'AGO', value: agoStock > 0 ? Math.min(100, (agoStock / (pmsStock + agoStock || 1)) * 100) : 50, color: '#E8B86E' },
-      ];
-
-      const salesChangePercent = Math.round((Math.random() * 30 - 10) * 10) / 10;
-      const expenseChangePercent = Math.round((Math.random() * 20 - 10) * 10) / 10;
-
-      setAnalyticsData({
-        salesTrends: {
-          total: totalSales,
-          change: totalSales * (salesChangePercent / 100),
-          changePercent: salesChangePercent,
-          trend: salesChangePercent >= 0 ? 'up' : 'down',
-          chartData: salesChartData,
-        },
-        expenseDistribution: {
-          total: totalExpenses,
-          change: totalExpenses * (expenseChangePercent / 100),
-          changePercent: expenseChangePercent,
-          trend: expenseChangePercent < 0 ? 'down' : 'up',
-          chartData: expenseChartData,
-        },
-        stockVariance: {
-          total: pmsStock + agoStock,
-          change: Math.floor(Math.random() * 200) - 100,
-          changePercent: Math.floor(Math.random() * 20) - 10,
-          trend: Math.random() > 0.5 ? 'up' : 'down',
-          chartData: stockVarianceData,
-        },
-      });
-
-    } catch (error) {
-      console.error('Error loading analytics data:', error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [selectedPeriod, selectedStation]);
+   const loadAnalyticsData = useCallback(async () => {
+     try {
+       setLoading(true);
+       
+       const endDate = new Date();
+       const currentDateRange = getDateRangeForPeriodAndEndDate(selectedPeriod, endDate);
+       const previousEndDate = new Date(currentDateRange.start);
+       previousEndDate.setDate(previousEndDate.getDate() - 1); // day before current period starts
+       const previousDateRange = getDateRangeForPeriodAndEndDate(selectedPeriod, previousEndDate);
+       
+       const daysInPeriod = getDaysInPeriod(currentDateRange);
+       
+       const stationFilter = selectedStation !== 'All Stations' ? { station_name: selectedStation } : {};
+       
+       // Fetch sales data for current and previous periods
+       const [currentSalesResult, previousSalesResult] = await Promise.all([
+         supabase
+           .from('daily_sales')
+           .select('total_amount, sale_date, station_name')
+           .gte('sale_date', currentDateRange.start)
+           .lte('sale_date', currentDateRange.end)
+           .order('sale_date', { ascending: true }),
+         supabase
+           .from('daily_sales')
+           .select('total_amount, sale_date, station_name')
+           .gte('sale_date', previousDateRange.start)
+           .lte('sale_date', previousDateRange.end)
+           .order('sale_date', { ascending: true })
+       ]);
+       
+       // Fetch expenses data for current and previous periods
+       const [currentExpensesResult, previousExpensesResult] = await Promise.all([
+         supabase
+           .from('expenses')
+           .select('category, amount, expense_date')
+           .gte('expense_date', currentDateRange.start)
+           .lte('expense_date', currentDateRange.end)
+           .order('expense_date', { ascending: true }),
+         supabase
+           .from('expenses')
+           .select('category, amount, expense_date')
+           .gte('expense_date', previousDateRange.start)
+           .lte('expense_date', previousDateRange.end)
+           .order('expense_date', { ascending: true })
+       ]);
+       
+       // Fetch stock data (only current, as historical stock levels not available)
+       const stockDataResult = await supabase
+         .from('stock_items')
+         .select('item_name, current_stock');
+       
+       // Process sales data
+       let totalSalesCurrent = 0;
+       let totalSalesPrevious = 0;
+       const salesBuckets: Record<string, { cdf: number; count: number }> = {};
+       
+       if (currentSalesResult.data) {
+         currentSalesResult.data.forEach(sale => {
+           totalSalesCurrent += sale.total_amount || 0;
+           const bucket = getPeriodBuckets(selectedPeriod, sale.sale_date);
+           if (!salesBuckets[bucket]) {
+             salesBuckets[bucket] = { cdf: 0, count: 0 };
+           }
+           salesBuckets[bucket].cdf += sale.total_amount || 0;
+           salesBuckets[bucket].count += 1;
+         });
+       }
+       
+       if (previousSalesResult.data) {
+         previousSalesResult.data.forEach(sale => {
+           totalSalesPrevious += sale.total_amount || 0;
+         });
+       }
+       
+       const salesChartData = Object.entries(salesBuckets)
+         .map(([label, data]) => ({
+           label: label.length > 20 ? label.substring(0, 18) + '...' : label,
+           value: data.cdf,
+           color: '#F0C38E',
+         }))
+         .sort((a, b) => a.label.localeCompare(b.label))
+         .slice(-6);
+       
+       // Process expenses data
+       let totalExpensesCurrent = 0;
+       let totalExpensesPrevious = 0;
+       const expenseCategories: Record<string, number> = {};
+       
+       if (currentExpensesResult.data) {
+         currentExpensesResult.data.forEach(expense => {
+           totalExpensesCurrent += expense.amount || 0;
+           expenseCategories[expense.category] = (expenseCategories[expense.category] || 0) + (expense.amount || 0);
+         });
+       }
+       
+       if (previousExpensesResult.data) {
+         previousExpensesResult.data.forEach(expense => {
+           totalExpensesPrevious += expense.amount || 0;
+         });
+       }
+       
+       const topCategories = Object.entries(expenseCategories)
+         .map(([name, amount]) => ({
+           name,
+           amount,
+           percentage: totalExpensesCurrent > 0 ? (amount / totalExpensesCurrent) * 100 : 0,
+         }))
+         .sort((a, b) => b.amount - a.amount)
+         .slice(0, 4);
+       
+       const expenseChartData = topCategories.map((cat, index) => ({
+         label: cat.name.length > 12 ? cat.name.substring(0, 10) + '...' : cat.name,
+         value: cat.percentage,
+         color: ['#F0C38E', '#E8B86E', '#D4A055', '#C89045'][index] || '#F0C38E',
+       }));
+       
+       // Process stock data
+       let pmsStock = 0;
+       let agoStock = 0;
+       if (stockDataResult.data) {
+         stockDataResult.data.forEach(stock => {
+           if (stock.item_name === 'PMS') pmsStock = stock.current_stock || 0;
+           if (stock.item_name === 'AGO') agoStock = stock.current_stock || 0;
+         });
+       }
+       
+       const stockVarianceData = [
+         { label: 'PMS', value: pmsStock > 0 ? Math.min(100, (pmsStock / (pmsStock + agoStock || 1)) * 100) : 50, color: '#F0C38E' },
+         { label: 'AGO', value: agoStock > 0 ? Math.min(100, (agoStock / (pmsStock + agoStock || 1)) * 100) : 50, color: '#E8B86E' },
+       ];
+       
+       // Calculate changes and averages
+       const salesChange = totalSalesCurrent - totalSalesPrevious;
+       const salesChangePercent = totalSalesPrevious !== 0 ? (salesChange / totalSalesPrevious) * 100 : 0;
+       const salesAverage = totalSalesCurrent / daysInPeriod;
+       
+       const expenseChange = totalExpensesCurrent - totalExpensesPrevious;
+       const expenseChangePercent = totalExpensesPrevious !== 0 ? (expenseChange / totalExpensesPrevious) * 100 : 0;
+       const expenseAverage = totalExpensesCurrent / daysInPeriod;
+       
+       // For stock, we don't have historical data, so set change to 0
+       const stockChange = 0;
+       const stockChangePercent = 0;
+       
+       setAnalyticsData({
+         salesTrends: {
+           total: totalSalesCurrent,
+           change: salesChange,
+           changePercent: salesChangePercent,
+           trend: salesChangePercent >= 0 ? 'up' : 'down',
+           chartData: salesChartData,
+           average: salesAverage,
+         },
+         expenseDistribution: {
+           total: totalExpensesCurrent,
+           change: expenseChange,
+           changePercent: expenseChangePercent,
+           trend: expenseChangePercent < 0 ? 'down' : 'up',
+           chartData: expenseChartData,
+           average: expenseAverage,
+         },
+         stockVariance: {
+           total: pmsStock + agoStock,
+           change: stockChange,
+           changePercent: stockChangePercent,
+           trend: stockChangePercent >= 0 ? 'up' : 'down',
+           chartData: stockVarianceData,
+         },
+       });
+       
+     } catch (error) {
+       console.error('Error loading analytics data:', error);
+     } finally {
+       setLoading(false);
+       setRefreshing(false);
+     }
+   }, [selectedPeriod, selectedStation]);
 
   useEffect(() => {
     loadAnalyticsData();
@@ -313,85 +407,97 @@ export default function AnalyticsScreen() {
     </View>
   );
 
-  const renderSalesTrendsChart = () => {
-    return (
-      <View style={styles.chartContainer}>
-        <View style={styles.chartHeader}>
-          <Text style={styles.chartTitle}>Sales Trends</Text>
-          <View style={styles.metricContainer}>
-            <Text style={styles.metricValue}>{formatCurrency.CDF(analyticsData.salesTrends.total)}</Text>
-            <Text style={styles.metricValueUSD}>{formatCurrency.USD(analyticsData.salesTrends.total / 2850.50)}</Text>
-            <View style={styles.changeContainer}>
-              <Ionicons
-                name={analyticsData.salesTrends.trend === 'up' ? 'trending-up' : 'trending-down'}
-                size={16}
-                color={analyticsData.salesTrends.trend === 'up' ? '#4CAF50' : '#F44336'}
-              />
-              <Text
-                style={[
-                  styles.changeText,
-                  { color: analyticsData.salesTrends.trend === 'up' ? '#4CAF50' : '#F44336' },
-                ]}
-              >
-                {analyticsData.salesTrends.changePercent > 0 ? '+' : ''}{analyticsData.salesTrends.changePercent}%
-              </Text>
-            </View>
-          </View>
-        </View>
-        <Text style={styles.chartSubtitle}>
-          {selectedStation} - {getPeriodLabel(selectedPeriod)}
-        </Text>
-        
-        {analyticsData.salesTrends.chartData.length > 0 ? (
-          <LineChart data={analyticsData.salesTrends.chartData} height={140} showValues={true} />
-        ) : (
-          <View style={styles.noDataContainer}>
-            <Text style={styles.noDataText}>No sales data available for this period</Text>
-          </View>
-        )}
-      </View>
-    );
-  };
+   const renderSalesTrendsChart = () => {
+     return (
+       <View style={styles.chartContainer}>
+         <View style={styles.chartHeader}>
+           <Text style={styles.chartTitle}>Sales Trends</Text>
+           <View style={styles.metricContainer}>
+             <View style={styles.metricRow}>
+               <Text style={styles.metricValue}>{formatCurrency.CDF(analyticsData.salesTrends.total)}</Text>
+               <Text style={styles.metricValueUSD}>{formatCurrency.USD(analyticsData.salesTrends.total / 2850.50)}</Text>
+             </View>
+             <View style={styles.metricRow}>
+               <Text style={styles.metricValue}>Avg/Day: {formatCurrency.CDF(analyticsData.salesTrends.average)}</Text>
+               <Text style={styles.metricValueUSD}>{formatCurrency.USD(analyticsData.salesTrends.average / 2850.50)}</Text>
+             </View>
+             <View style={styles.changeContainer}>
+               <Ionicons
+                 name={analyticsData.salesTrends.trend === 'up' ? 'trending-up' : 'trending-down'}
+                 size={16}
+                 color={analyticsData.salesTrends.trend === 'up' ? '#4CAF50' : '#F44336'}
+               />
+               <Text
+                 style={[
+                   styles.changeText,
+                   { color: analyticsData.salesTrends.trend === 'up' ? '#4CAF50' : '#F44336' },
+                 ]}
+               >
+                 {analyticsData.salesTrends.changePercent > 0 ? '+' : ''}{analyticsData.salesTrends.changePercent}%
+               </Text>
+             </View>
+           </View>
+         </View>
+         <Text style={styles.chartSubtitle}>
+           {selectedStation} - {getPeriodLabel(selectedPeriod)}
+         </Text>
+         
+         {analyticsData.salesTrends.chartData.length > 0 ? (
+           <LineChart data={analyticsData.salesTrends.chartData} height={140} showValues={true} />
+         ) : (
+           <View style={styles.noDataContainer}>
+             <Text style={styles.noDataText}>No sales data available for this period</Text>
+           </View>
+         )}
+       </View>
+     );
+   };
 
-  const renderExpenseDistributionChart = () => {
-    return (
-      <View style={styles.chartContainer}>
-        <View style={styles.chartHeader}>
-          <Text style={styles.chartTitle}>Expense Distribution</Text>
-          <View style={styles.metricContainer}>
-            <Text style={styles.metricValue}>{formatCurrency.CDF(analyticsData.expenseDistribution.total)}</Text>
-            <Text style={styles.metricValueUSD}>{formatCurrency.USD(analyticsData.expenseDistribution.total / 2850.50)}</Text>
-            <View style={styles.changeContainer}>
-              <Ionicons
-                name={analyticsData.expenseDistribution.trend === 'up' ? 'trending-up' : 'trending-down'}
-                size={16}
-                color={analyticsData.expenseDistribution.trend === 'up' ? '#4CAF50' : '#F44336'}
-              />
-              <Text
-                style={[
-                  styles.changeText,
-                  { color: analyticsData.expenseDistribution.trend === 'up' ? '#4CAF50' : '#F44336' },
-                ]}
-              >
-                {analyticsData.expenseDistribution.changePercent > 0 ? '+' : ''}{analyticsData.expenseDistribution.changePercent}%
-              </Text>
-            </View>
-          </View>
-        </View>
-        <Text style={styles.chartSubtitle}>
-          {selectedStation} - {getPeriodLabel(selectedPeriod)}
-        </Text>
-        
-        {analyticsData.expenseDistribution.chartData.length > 0 ? (
-          <BarChart data={analyticsData.expenseDistribution.chartData} height={140} showValues={true} />
-        ) : (
-          <View style={styles.noDataContainer}>
-            <Text style={styles.noDataText}>No expense data available for this period</Text>
-          </View>
-        )}
-      </View>
-    );
-  };
+   const renderExpenseDistributionChart = () => {
+     return (
+       <View style={styles.chartContainer}>
+         <View style={styles.chartHeader}>
+           <Text style={styles.chartTitle}>Expense Distribution</Text>
+           <View style={styles.metricContainer}>
+             <View style={styles.metricRow}>
+               <Text style={styles.metricValue}>{formatCurrency.CDF(analyticsData.expenseDistribution.total)}</Text>
+               <Text style={styles.metricValueUSD}>{formatCurrency.USD(analyticsData.expenseDistribution.total / 2850.50)}</Text>
+             </View>
+             <View style={styles.metricRow}>
+               <Text style={styles.metricValue}>Avg/Day: {formatCurrency.CDF(analyticsData.expenseDistribution.average)}</Text>
+               <Text style={styles.metricValueUSD}>{formatCurrency.USD(analyticsData.expenseDistribution.average / 2850.50)}</Text>
+             </View>
+             <View style={styles.changeContainer}>
+               <Ionicons
+                 name={analyticsData.expenseDistribution.trend === 'up' ? 'trending-up' : 'trending-down'}
+                 size={16}
+                 color={analyticsData.expenseDistribution.trend === 'up' ? '#4CAF50' : '#F44336'}
+               />
+               <Text
+                 style={[
+                   styles.changeText,
+                   { color: analyticsData.expenseDistribution.trend === 'up' ? '#4CAF50' : '#F44336' },
+                 ]}
+               >
+                 {analyticsData.expenseDistribution.changePercent > 0 ? '+' : ''}{analyticsData.expenseDistribution.changePercent}%
+               </Text>
+             </View>
+           </View>
+         </View>
+         <Text style={styles.chartSubtitle}>
+           {selectedStation} - {getPeriodLabel(selectedPeriod)}
+         </Text>
+         
+         {analyticsData.expenseDistribution.chartData.length > 0 ? (
+           <BarChart data={analyticsData.expenseDistribution.chartData} height={140} showValues={true} />
+         ) : (
+           <View style={styles.noDataContainer}>
+             <Text style={styles.noDataText}>No expense data available for this period</Text>
+           </View>
+         )}
+       </View>
+     );
+   };
 
   const renderStockVarianceChart = () => {
     return (
@@ -589,15 +695,20 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     flex: 1,
   },
-  metricContainer: {
-    alignItems: 'flex-end',
-  },
-  metricValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#F0C38E',
-    textAlign: 'right',
-  },
+   metricContainer: {
+     alignItems: 'flex-end',
+   },
+   metricRow: {
+     flexDirection: 'row',
+     justifyContent: 'space-between',
+     marginBottom: 4,
+   },
+   metricValue: {
+     fontSize: 18,
+     fontWeight: 'bold',
+     color: '#F0C38E',
+     textAlign: 'right',
+   },
   metricValueUSD: {
     fontSize: 13,
     color: 'rgba(255, 255, 255, 0.7)',

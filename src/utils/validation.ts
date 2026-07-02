@@ -185,7 +185,7 @@ export const CommonRules = {
   fuelType: (message?: string): ValidationRule => ({
     required: true,
     custom: (value) => {
-      const validTypes = ['Petrol', 'Diesel', 'Kerosene', 'Gas'];
+       const validTypes = ['PMS', 'AGO'];
       if (!validTypes.includes(value)) {
         return message || 'Please select a valid fuel type';
       }
@@ -306,6 +306,8 @@ export const sanitizeInput = {
   // Remove HTML tags and dangerous characters
   html: (input: string): string => {
     return input
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '') // Remove script tags and content
+      .replace(/<iframe[^>]*>[\s\S]*?<\/iframe>/gi, '') // Remove iframe tags and content
       .replace(/<[^>]*>/g, '') // Remove HTML tags
       .replace(/[<>]/g, '') // Remove remaining angle brackets
       .trim();
@@ -318,8 +320,7 @@ export const sanitizeInput = {
       .replace(/[;]/g, '') // Remove semicolons
       .replace(/--/g, '') // Remove SQL comment markers
       .replace(/\/\*/g, '') // Remove SQL comment start
-      .replace(/\*\//g, '') // Remove SQL comment end
-      .trim();
+      .replace(/\*\//g, ''); // Remove SQL comment end
   },
   
   // Sanitize for display

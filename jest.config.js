@@ -1,3 +1,6 @@
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '.env') });
+
 module.exports = {
   preset: 'jest-expo',
   setupFilesAfterEnv: ['<rootDir>/__tests__/setup.ts'],
@@ -6,9 +9,9 @@ module.exports = {
     '<rootDir>/android/',
     '<rootDir>/ios/',
   ],
-  transformIgnorePatterns: [
-    'node_modules/(?!(react-native|@react-native|@react-navigation|expo|@expo|expo-modules-core|@supabase|react-native-gesture-handler|react-native-screens|react-native-safe-area-context|@react-native-async-storage|@react-native-community|react-native-vector-icons|expo-crypto|expo-constants|expo-device)/)',
-  ],
+    transformIgnorePatterns: [
+      'node_modules/(?!(react-native|@react-native|@react-navigation|expo|@expo|expo-modules-core|expo-image-picker|@supabase|react-native-gesture-handler|react-native-screens|react-native-safe-area-context|@react-native-async-storage|@react-native-community|react-native-vector-icons|expo-crypto|expo-constants|expo-device)/)',
+    ],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
   collectCoverageFrom: [
     'src/**/*.{ts,tsx}',
@@ -19,8 +22,8 @@ module.exports = {
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],
   testMatch: [
-    '**/__tests__/**/*.(ts|tsx|js)',
-    '**/*.(test|spec).(ts|tsx|js)',
+    '**/__tests__/**/*.(test|spec).(ts|tsx|js)',
+    '**/*.test.(ts|tsx|js)',
   ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',

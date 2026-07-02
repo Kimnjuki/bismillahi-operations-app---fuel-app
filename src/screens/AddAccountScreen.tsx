@@ -15,20 +15,22 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { accountService } from '../services/accountService';
-import { AccountType, Currency, AccountStatus } from '../types';
+import { internalAccountService } from '../services/internalAccountService';
+import { AccountType, Currency, AccountStatus, InternalAccountType } from '../types';
 import { formatCurrency } from '../constants/currency';
 
 export default function AddAccountScreen() {
   const { appUser } = useAuth();
   const navigation = useNavigation();
   const route = useRoute();
-  const accountType = (route.params as any)?.type as AccountType;
+  const accountType = (route.params as any)?.type as 'receivable' | 'payable' | 'operational' | 'station';
 
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     // Common fields
     name: '',
     code: '',
+    accountType: 'operating' as InternalAccountType,
     description: '',
     currency: 'CDF' as Currency,
     totalAmount: '',
@@ -43,6 +45,7 @@ export default function AddAccountScreen() {
 
   const currencies: Currency[] = ['CDF', 'USD'];
   const statusOptions: AccountStatus[] = ['pending', 'overdue', 'paid', 'partial', 'cancelled'];
+  const accountTypes: InternalAccountType[] = ['operating', 'transit'];
 
   useEffect(() => {
     // Set default due date to 30 days from today
@@ -128,13 +131,19 @@ export default function AddAccountScreen() {
           created_by: appUser?.id || '',
         });
       } else {
-        // Legacy account types (station, operational)
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        response = { success: true };
+        response = await internalAccountService.createAccount({
+          account_name: formData.name,
+          account_code: formData.code,
+          account_type: formData.accountType,
+          currency: formData.currency as 'USD' | 'CDF',
+          balance: amount,
+          is_active: true,
+        });
       }
 
       if (response.success) {
-        Alert.alert('Success', `${accountType === 'receivable' ? 'Creditor' : accountType === 'payable' ? 'Debtor' : 'Account'} created successfully`, [
+        const label = accountType === 'receivable' ? 'Creditor' : accountType === 'payable' ? 'Debtor' : 'Internal Account';
+        Alert.alert('Success', `${label} created successfully`, [
           { text: 'OK', onPress: () => navigation.goBack() }
         ]);
       } else {
@@ -247,6 +256,7 @@ export default function AddAccountScreen() {
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
   const [showStatusPicker, setShowStatusPicker] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showAccountTypePicker, setShowAccountTypePicker] = useState(false);
 
   return (
     <LinearGradient colors={['#312C51', '#48426D']} style={styles.container}>
@@ -257,10 +267,10 @@ export default function AddAccountScreen() {
             <TouchableOpacity onPress={() => navigation.goBack()}>
               <Ionicons name="arrow-back" size={24} color="#ffffff" />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>
-              {accountType === 'receivable' ? 'New Creditor' : 
-               accountType === 'payable' ? 'New Debtor' : 'New Account'}
-            </Text>
+             <Text style={styles.headerTitle}>
+               {accountType === 'receivable' ? 'New Creditor' : 
+                accountType === 'payable' ? 'New Debtor' : 'New Internal Account'}
+             </Text>
             <View style={styles.headerSpacer} />
           </View>
 
@@ -292,6 +302,19 @@ export default function AddAccountScreen() {
             )}
 
             {renderCurrencyField()}
+
+            {(accountType === 'operational' || accountType === 'station') && (
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Account Type</Text>
+                <TouchableOpacity
+                  style={styles.picker}
+                  onPress={() => setShowAccountTypePicker(true)}
+                >
+                  <Text style={styles.pickerText}>{formData.accountType === 'operating' ? 'Operating' : 'Transit'}</Text>
+                  <Ionicons name="chevron-down" size={20} color="#F0C38E" />
+                </TouchableOpacity>
+              </View>
+            )}
 
             {renderAmountField()}
 
@@ -347,13 +370,53 @@ export default function AddAccountScreen() {
               disabled={loading}
             >
               <Text style={styles.saveButtonText}>
-                {loading ? 'Saving...' : 
-                 accountType === 'receivable' ? 'Save Creditor' : 
-                 accountType === 'payable' ? 'Save Debtor' : 'Save Account'}
-              </Text>
+                 {loading ? 'Saving...' : 
+                  accountType === 'receivable' ? 'Save Creditor' : 
+                  accountType === 'payable' ? 'Save Debtor' : 'Save Account'}
+               </Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
+
+        {/* Account Type Picker Modal */}
+        <Modal
+          visible={showAccountTypePicker}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowAccountTypePicker(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Select Account Type</Text>
+              {accountTypes.map((type) => (
+                <TouchableOpacity
+                  key={type}
+                  style={[
+                    styles.modalOption,
+                    formData.accountType === type && styles.modalOptionSelected
+                  ]}
+                  onPress={() => {
+                    setFormData(prev => ({ ...prev, accountType: type }));
+                    setShowAccountTypePicker(false);
+                  }}
+                >
+                  <Text style={[
+                    styles.modalOptionText,
+                    formData.accountType === type && styles.modalOptionTextSelected
+                  ]}>
+                    {type === 'operating' ? 'Operating' : 'Transit'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => setShowAccountTypePicker(false)}
+              >
+                <Text style={styles.modalCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
 
         {/* Currency Picker Modal */}
         <Modal

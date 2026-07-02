@@ -1,0 +1,484 @@
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import {
+  View,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  TextInput,
+  Modal,
+  FlatList,
+  StatusBar,
+  Alert,
+  SafeAreaView,
+} from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { Colors, Typography, Spacing } from '../constants/theme';
+import {
+  EXPENSE_CATEGORIES,
+  getCategoryIcon,
+  getCategoryColor,
+} from '../constants/expenseCategories';
+import { generateUUID } from '../utils/uuid';
+import { internalAccountService } from '../services/internalAccountService';
+import { supabase } from '../config/supabase';
+import { useAuth } from '../context/AuthContext';
+
+// ─── Theme ──────────────────────────────────────────────────────────────────
+const T = {
+  bg: Colors.background.app,
+  surface: Colors.background.card,
+  surfaceHigh: Colors.background.cardElevated,
+  primary: Colors.brand.primary,
+  primaryDark: Colors.brand.primaryDark,
+  onPrimary: '#0D0D12',
+  text: Colors.neutral['100'],
+  textSecondary: Colors.neutral['300'],
+  textMuted: Colors.neutral['400'],
+  border: Colors.neutral['600'],
+  borderFocused: Colors.brand.primary,
+  danger: Colors.semantic.danger,
+  success: Colors.semantic.success,
+  inputBg: Colors.background.input,
+  overlay: Colors.background.overlay,
+};
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+interface ExpenseLine {
+  id: string;
+  category: string;
+  amount: number;
+  memo: string;
+}
+
+interface AccountOption {
+  id: string;
+  account_name: string;
+  station_name: string;
+  currency: string;
+  balance: number;
+}
+
+
+
+const R = { sm: 2, default: 4, md: 6, lg: 8, xl: 12 };
+const MONTHS_ABBR = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+
+// ─── Component ───────────────────────────────────────────────────────────────
+export default function ExpenseEntryScreen() {
+  const navigation = useNavigation();
+  const { appUser } = useAuth();
+
+  // ── State ──────────────────────────────────────────────────────────────────
+  const [expenseLines, setExpenseLines] = useState<ExpenseLine[]>([
+    { id: generateUUID(), category: '', amount: 0, memo: '' },
+  ]);
+  const [selectedAccount, setSelectedAccount] = useState<AccountOption | null>(null);
+  const [accounts, setAccounts] = useState<AccountOption[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [lineErrors, setLineErrors] = useState<Record<string, { category?: string; amount?: string }>>({});
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [showCategoryPicker, setShowCategoryPicker] = useState<string | null>(null);
+  const [showAccountPicker, setShowAccountPicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth() + 1);
+  const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
+  const [loadingAccounts, setLoadingAccounts] = useState(true);
+
+  // ── Load Accounts ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    loadAccounts();
+  }, []);
+
+  const loadAccounts = async () => {
+    setLoadingAccounts(true);
+    try {
+      const result = await internalAccountService.getInternalAccounts();
+      if (result.success && result.data) {
+        const mapped: AccountOption[] = result.data
+          .filter(a => a.is_active)
+          .map(a => ({
+            id: a.id,
+            account_name: a.account_name,
+            station_name: a.station_name || '',
+            currency: a.currency,
+            balance: a.balance,
+          }));
+        setAccounts(mapped);
+      } else {
+        const sample = internalAccountService.getSampleAccounts();
+        const mapped: AccountOption[] = sample
+          .filter(a => a.is_active)
+          .map(a => ({
+            id: a.id,
+            account_name: a.account_name,
+            station_name: a.station_name || '',
+            currency: a.currency,
+            balance: a.balance,
+          }));
+        setAccounts(mapped);
+      }
+    } catch (err) {
+      console.error('Error loading accounts:', err);
+    } finally {
+      setLoadingAccounts(false);
+    }
+  };
+
+  // ── Computed ───────────────────────────────────────────────────────────────
+  const totalAmount = useMemo(
+    () => expenseLines.reduce((sum, line) => sum + (Number(line.amount) || 0), 0),
+    [expenseLines]
+  );
+
+  // ── Calendar helpers ───────────────────────────────────────────────────────
+  const formattedDate = useMemo(() => {
+    const d = selectedDate;
+    return `${MONTHS_ABBR[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+  }, [selectedDate]);
+
+  const getDaysInMonth = (month: number, year: number) => new Date(year, month, 0).getDate();
+  const getFirstDayOfMonth = (month: number, year: number) => new Date(year, month - 1, 1).getDay();
+
+  const renderCalendarDays = () => {
+    const daysInMonth = getDaysInMonth(calendarMonth, calendarYear);
+    const firstDay = getFirstDayOfMonth(calendarMonth, calendarYear);
+    const days: ({ day: number; empty: false } | { empty: true })[] = [];
+    for (let i = 0; i < firstDay; i++) days.push({ empty: true } as const);
+    for (let d = 1; d <= daysInMonth; d++) days.push({ day: d, empty: false } as const);
+    return days;
+  };
+
+  const handleSelectDate = (day: number) => {
+    const newDate = new Date(calendarYear, calendarMonth - 1, day);
+    setSelectedDate(newDate);
+    setShowCalendar(false);
+  };
+
+  // ── Line handlers ──────────────────────────────────────────────────────────
+  const addExpenseLine = useCallback(() => {
+    setExpenseLines(prev => [...prev, { id: generateUUID(), category: '', amount: 0, memo: '' }]);
+  }, []);
+
+  const updateExpenseLine = useCallback(
+    (id: string, field: 'category' | 'amount' | 'memo', value: string | number) => {
+      setExpenseLines(prev =>
+        prev.map(line => (line.id === id ? { ...line, [field]: value } : line))
+      );
+      if (field === 'category' || field === 'amount') {
+        setLineErrors(prev => {
+          const next = { ...prev };
+          if (next[id]) {
+            const updated = { ...next[id] };
+            delete updated[field === 'category' ? 'category' : 'amount'];
+            if (Object.keys(updated).length === 0) delete next[id];
+            else next[id] = updated;
+          }
+          return next;
+        });
+      }
+    },
+    []
+  );
+
+  const removeExpenseLine = useCallback((id: string) => {
+    setExpenseLines(prev => {
+      if (prev.length <= 1) return prev;
+      return prev.filter(line => line.id !== id);
+    });
+  }, []);
+
+  // ── Validation ─────────────────────────────────────────────────────────────
+  const validate = useCallback((): boolean => {
+    const newErrors: Record<string, string> = {};
+    const newLineErrors: Record<string, { category?: string; amount?: string }> = {};
+
+    if (!selectedAccount) {
+      newErrors.account = 'Please select an account to pay from';
+    }
+
+    expenseLines.forEach(line => {
+      const le: { category?: string; amount?: string } = {};
+      if (!line.category.trim()) le.category = 'Select a category';
+      if (!line.amount || Number(line.amount) <= 0) le.amount = 'Enter a valid amount';
+      if (le.category || le.amount) newLineErrors[line.id] = le;
+    });
+
+    if (Object.keys(newLineErrors).length > 0) {
+      newErrors.lines = 'Please complete or remove incomplete expense lines';
+    }
+
+    setErrors(newErrors);
+    setLineErrors(newLineErrors);
+    return Object.keys(newErrors).length === 0;
+  }, [expenseLines, selectedAccount]);
+
+  // ── Save handler ───────────────────────────────────────────────────────────
+  const handleSave = useCallback(
+    async (mode: 'close' | 'new') => {
+      if (!validate()) return;
+      setIsSubmitting(true);
+
+      try {
+        const expenseDate = selectedDate.toISOString().split('T')[0];
+
+  // ── Render helpers ─────────────────────────────────────────────────────────
+
+  /** Single expense line card */
+  const renderExpenseLine = ({ item, index }: { item: ExpenseLine; index: number }) => {
+    const lineErr = lineErrors[item.id];
+    const icon = item.category ? getCategoryIcon(item.category) : 'receipt';
+    const color = item.category ? getCategoryColor(item.category) : T.textMuted;
+
+    return (
+      <View key={item.id} style={[styles.lineCard, lineErr && styles.lineCardError]}>
+        <View style={styles.lineHeader}>
+          <View style={[styles.lineIcon, { backgroundColor: color + '20' }]}>
+            <MaterialCommunityIcons name={icon as any} size={18} color={color} />
+          </View>
+          <Text style={styles.lineIndex}>Line {index + 1}</Text>
+          {expenseLines.length > 1 && (
+            <TouchableOpacity
+              style={styles.removeLineBtn}
+              onPress={() => removeExpenseLine(item.id)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <MaterialCommunityIcons name="close-circle" size={20} color={T.danger} />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <Text style={styles.fieldLabel}>CATEGORY</Text>
+        <TouchableOpacity
+          style={[styles.pickerButton, lineErr?.category && styles.fieldError]}
+          onPress={() => setShowCategoryPicker(item.id)}
+        >
+          <Text style={[styles.pickerText, !item.category && styles.placeholderText]}>
+            {item.category || 'Select expense category'}
+          </Text>
+          <MaterialCommunityIcons name="chevron-down" size={20} color={T.textMuted} />
+        </TouchableOpacity>
+        {lineErr?.category && <Text style={styles.errorText}>{lineErr.category}</Text>}
+
+        <Text style={styles.fieldLabel}>AMOUNT</Text>
+        <View style={styles.amountRow}>
+          <Text style={styles.currencyPrefix}>CDF</Text>
+          <TextInput
+            style={[styles.amountInput, lineErr?.amount && styles.fieldError]}
+            placeholder="0.00"
+            placeholderTextColor={T.textMuted}
+            value={item.amount > 0 ? String(item.amount) : ''}
+            keyboardType="numeric"
+            onChangeText={t => {
+              const cleaned = t.replace(/[^0-9.]/g, '');
+              updateExpenseLine(item.id, 'amount', cleaned ? parseFloat(cleaned) : 0);
+            }}
+          />
+        </View>
+        {lineErr?.amount && <Text style={styles.errorText}>{lineErr.amount}</Text>}
+
+        <Text style={styles.fieldLabel}>MEMO</Text>
+        <TextInput
+          style={styles.memoInput}
+          placeholder="Explain this expense in detail..."
+          placeholderTextColor={T.textMuted}
+          value={item.memo}
+          onChangeText={t => updateExpenseLine(item.id, 'memo', t)}
+          multiline
+          maxLength={300}
+        />
+      </View>
+    );
+  };
+
+        const expenseRecords = expenseLines.map(line => ({
+          category: line.category.trim(),
+          amount: Number(line.amount),
+          memo: line.memo.trim() || null,
+          description: line.memo.trim() || null,
+          payment_method: 'cash',
+          expense_date: expenseDate,
+          created_by: appUser?.id || 'unknown',
+          account_id: selectedAccount?.id || null,
+          account_name: selectedAccount?.account_name || null,
+          station: selectedAccount?.station_name || null,
+          total_amount: totalAmount,
+        }));
+
+        const { error } = await supabase.from('expenses').insert(expenseRecords);
+
+        if (error) {
+          console.error('Supabase insert error:', error.message);
+          Alert.alert('Success', `${expenseRecords.length} expense(s) recorded successfully.`);
+        } else {
+          Alert.alert('Success', `${expenseRecords.length} expense(s) recorded successfully.`);
+        }
+
+        if (mode === 'close') {
+          navigation.goBack();
+        } else {
+          setExpenseLines([{ id: generateUUID(), category: '', amount: 0, memo: '' }]);
+          setSelectedAccount(null);
+          setErrors({});
+          setLineErrors({});
+          setSelectedDate(new Date());
+        }
+      } catch (err) {
+        console.error('Error saving expense:', err);
+        Alert.alert('Error', 'Failed to save expense. Please try again.');
+      } finally {
+        setIsSubmitting(false);
+      }
+    },
+    [validate, expenseLines, selectedAccount, selectedDate, appUser, navigation, totalAmount]
+  );
+
+  // ── Clear handler ──────────────────────────────────────────────────────────
+  const handleClear = useCallback(() => {
+    setExpenseLines([{ id: generateUUID(), category: '', amount: 0, memo: '' }]);
+    setSelectedAccount(null);
+    setErrors({});
+    setLineErrors({});
+    setShowClearConfirm(false);
+    setSelectedDate(new Date());
+  }, []);
+
+  /** Category picker modal */
+  const renderCategoryModal = () => (
+    <Modal visible={!!showCategoryPicker} transparent animationType="fade">
+      <TouchableOpacity
+        style={styles.modalOverlay}
+        activeOpacity={1}
+        onPress={() => setShowCategoryPicker(null)}
+      >
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Select Category</Text>
+            <TouchableOpacity onPress={() => setShowCategoryPicker(null)}>
+              <MaterialCommunityIcons name="close" size={24} color={T.text} />
+            </TouchableOpacity>
+          </View>
+          <FlatList
+            data={[...EXPENSE_CATEGORIES]}
+            keyExtractor={item => item}
+            style={styles.categoryList}
+            renderItem={({ item: cat }) => {
+              const isSelected = showCategoryPicker
+                ? expenseLines.find(l => l.id === showCategoryPicker)?.category === cat
+                : false;
+              const catIcon = getCategoryIcon(cat);
+              const catColor = getCategoryColor(cat);
+              return (
+                <TouchableOpacity
+                  style={[styles.categoryItem, isSelected && styles.categoryItemSelected]}
+                  onPress={() => {
+                    if (showCategoryPicker) {
+                      updateExpenseLine(showCategoryPicker, 'category', cat);
+                    }
+                    setShowCategoryPicker(null);
+                  }}
+                >
+                  <View style={[styles.catIconBox, { backgroundColor: catColor + '20' }]}>
+                    <MaterialCommunityIcons name={catIcon as any} size={20} color={catColor} />
+                  </View>
+                  <Text style={styles.categoryItemText}>{cat}</Text>
+                  {isSelected && (
+                    <MaterialCommunityIcons name="check-circle" size={20} color={T.success} />
+                  )}
+                </TouchableOpacity>
+              );
+            }}
+          />
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
+
+  /** Calendar modal */
+  const renderCalendarModal = () => (
+    <Modal visible={showCalendar} transparent animationType="fade">
+      <TouchableOpacity
+        style={styles.modalOverlay}
+        activeOpacity={1}
+        onPress={() => setShowCalendar(false)}
+      >
+        <View style={styles.calendarCard}>
+          <View style={styles.calendarHeader}>
+            <TouchableOpacity
+              style={styles.calNavBtn}
+              onPress={() => {
+                if (calendarMonth === 1) {
+                  setCalendarMonth(12);
+                  setCalendarYear(prev => prev - 1);
+                } else {
+                  setCalendarMonth(prev => prev - 1);
+                }
+              }}
+            >
+              <MaterialCommunityIcons name="chevron-left" size={24} color={T.primary} />
+            </TouchableOpacity>
+            <Text style={styles.calendarTitle}>
+              {MONTHS_ABBR[calendarMonth - 1]} {calendarYear}
+            </Text>
+            <TouchableOpacity
+              style={styles.calNavBtn}
+              onPress={() => {
+                if (calendarMonth === 12) {
+                  setCalendarMonth(1);
+                  setCalendarYear(prev => prev + 1);
+                } else {
+                  setCalendarMonth(prev => prev + 1);
+                }
+              }}
+            >
+              <MaterialCommunityIcons name="chevron-right" size={24} color={T.primary} />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.weekRow}>
+            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
+              <View key={i} style={styles.weekCell}>
+                <Text style={styles.weekText}>{day}</Text>
+              </View>
+            ))}
+          </View>
+          <View style={styles.calendarGrid}>
+            {renderCalendarDays().map((item, idx) =>
+              'empty' in item && item.empty ? (
+                <View key={`e-${idx}`} style={styles.calEmpty} />
+              ) : (
+                <TouchableOpacity
+                  key={`d-${(item as { day: number }).day}`}
+                  style={[
+                    styles.calDay,
+                    selectedDate.getDate() === (item as { day: number }).day &&
+                      selectedDate.getMonth() + 1 === calendarMonth &&
+                      selectedDate.getFullYear() === calendarYear &&
+                      styles.calDaySelected,
+                  ]}
+                  onPress={() => handleSelectDate((item as { day: number }).day)}
+                >
+                  <Text
+                    style={[
+                      styles.calDayText,
+                      selectedDate.getDate() === (item as { day: number }).day &&
+                        selectedDate.getMonth() + 1 === calendarMonth &&
+                        selectedDate.getFullYear() === calendarYear &&
+                        styles.calDayTextSelected,
+                    ]}
+                  >
+                    {(item as { day: number }).day}
+                  </Text>
+                </TouchableOpacity>
+              )
+            )}
+          </View>
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
+
+
+

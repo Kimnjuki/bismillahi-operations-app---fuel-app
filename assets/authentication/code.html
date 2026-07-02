@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Fuelr | Secure Shift Entry</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-secondary": "#053900",
+                        "on-tertiary-fixed-variant": "#474747",
+                        "on-secondary-container": "#0f6d00",
+                        "tertiary-fixed-dim": "#c8c6c6",
+                        "surface-dim": "#131313",
+                        "primary-container": "#ffb300",
+                        "outline": "#9e8e78",
+                        "outline-variant": "#514532",
+                        "error": "#ffb4ab",
+                        "surface-bright": "#393939",
+                        "on-surface-variant": "#d6c4ac",
+                        "surface-container-highest": "#353534",
+                        "tertiary-fixed": "#e4e2e1",
+                        "surface-tint": "#ffba38",
+                        "background": "#121212",
+                        "inverse-on-surface": "#313030",
+                        "surface-container": "#201f1f",
+                        "on-primary-fixed": "#281900",
+                        "tertiary": "#dfdddc",
+                        "on-surface": "#e5e2e1",
+                        "primary-fixed": "#ffdeac",
+                        "surface-container-high": "#2a2a2a",
+                        "surface": "#131313",
+                        "inverse-primary": "#7e5700",
+                        "on-primary": "#432c00",
+                        "on-error-container": "#ffdad6",
+                        "secondary": "#d7ffc5",
+                        "on-secondary-fixed": "#022100",
+                        "primary-fixed-dim": "#ffba38",
+                        "tertiary-container": "#c3c1c1",
+                        "on-error": "#690005",
+                        "error-container": "#93000a",
+                        "secondary-fixed-dim": "#2ae500",
+                        "secondary-container": "#2ff801",
+                        "on-tertiary-fixed": "#1b1c1c",
+                        "surface-variant": "#353534",
+                        "inverse-surface": "#e5e2e1",
+                        "on-tertiary-container": "#4f4f4f",
+                        "surface-container-low": "#1c1b1b",
+                        "primary": "#ffd79b",
+                        "on-background": "#e5e2e1",
+                        "on-secondary-fixed-variant": "#095300",
+                        "on-primary-fixed-variant": "#604100",
+                        "secondary-fixed": "#79ff5b",
+                        "on-tertiary": "#303030",
+                        "on-primary-container": "#6b4900",
+                        "surface-container-lowest": "#0e0e0e"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "lg": "32px",
+                        "md": "24px",
+                        "xs": "8px",
+                        "margin-mobile": "20px",
+                        "gutter-mobile": "12px",
+                        "xl": "48px",
+                        "sm": "16px",
+                        "base": "4px"
+                    },
+                    "fontFamily": {
+                        "body-md": ["Inter"],
+                        "headline-lg-mobile": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "label-sm": ["Inter"],
+                        "label-md": ["Inter"],
+                        "body-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "headline-lg-mobile": ["28px", {"lineHeight": "34px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "headline-md": ["24px", {"lineHeight": "30px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "label-sm": ["12px", {"lineHeight": "16px", "fontWeight": "500"}],
+                        "label-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .pin-dot {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .pin-dot.active {
+            background-color: #ffb300;
+            box-shadow: 0 0 15px rgba(255, 179, 0, 0.4);
+            transform: scale(1.1);
+        }
+        .keypad-btn:active {
+            background-color: #2a2a2a;
+            transform: scale(0.95);
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background font-body-md selection:bg-primary-container selection:text-on-primary-container min-h-screen flex flex-col">
+<!-- Top Navigation Anchor (As per Shared Components JSON) -->
+<header class="fixed top-0 w-full bg-background border-b border-outline-variant z-50">
+<div class="flex items-center justify-between px-margin-mobile h-16 w-full max-w-7xl mx-auto">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">shield</span>
+<span class="font-headline-md text-headline-md text-primary tracking-tight">Fuelr</span>
+</div>
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-on-surface-variant hover:bg-surface-container-high transition-colors p-2 rounded-full cursor-pointer">help_outline</span>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-1 flex flex-col items-center justify-center pt-24 pb-32 px-margin-mobile">
+<!-- Profile Snapshot -->
+<div class="flex flex-col items-center mb-xl animate-in fade-in slide-in-from-bottom-4 duration-700">
+<div class="w-20 h-20 rounded-full border-2 border-outline-variant p-1 mb-md">
+<img class="w-full h-full rounded-full object-cover grayscale brightness-75 hover:grayscale-0 transition-all duration-500" data-alt="A professional close-up portrait of a logistics field operator named Sam, wearing a sleek black utility jacket with a subtle Fuelr logo. The lighting is cinematic with amber rim lights against a dark industrial backdrop, reflecting a high-precision enterprise environment. The aesthetic is rugged yet sophisticated, consistent with the matte black and electric amber theme of the Fuelr brand." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCkWIxbcCpH6zXleDkv7p48Ni-VVS6kis_eD0d9gGl3Zjc36FCdAo8QKWqD9x5AsQ_64BqP6Afg5uNm2XOVJ4MxTKnLAA3cR-ANpj27qoKcHQNqEEuWWWT5afj27cmNQTzPIsTp9I42p15bhtH2jfDHwIqoFxqGc-DrU18GLxA_qHCtY4BFGRCCCJRMCQ0nw43yBNcMsokF0bepYRPrXXuWdMsYhEym7yc-wuCEe9Am4TQH8IhqB91R9FhmgHHoDMAxmJLNQhLn-vTw"/>
+</div>
+<h1 class="font-headline-md text-headline-md text-on-surface text-center">
+                Welcome back, <span class="text-primary-container">Sam</span>
+</h1>
+<p class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest mt-base">
+                Station Alpha | Zone 4
+            </p>
+</div>
+<!-- PIN Display Section -->
+<div class="w-full max-w-sm flex flex-col items-center">
+<div class="flex gap-4 mb-xl" id="pin-display">
+<!-- 6 Minimalist Dots -->
+<div class="pin-dot w-4 h-4 rounded-full border-2 border-outline"></div>
+<div class="pin-dot w-4 h-4 rounded-full border-2 border-outline"></div>
+<div class="pin-dot w-4 h-4 rounded-full border-2 border-outline"></div>
+<div class="pin-dot w-4 h-4 rounded-full border-2 border-outline"></div>
+<div class="pin-dot w-4 h-4 rounded-full border-2 border-outline"></div>
+<div class="pin-dot w-4 h-4 rounded-full border-2 border-outline"></div>
+</div>
+<!-- Custom Numeric Keypad -->
+<div class="grid grid-cols-3 gap-4 w-full max-w-[320px]">
+<button class="keypad-btn h-20 flex items-center justify-center rounded-xl border border-outline-variant bg-surface-container-low text-headline-md font-headline-md text-on-surface transition-all" onclick="handleInput('1')">1</button>
+<button class="keypad-btn h-20 flex items-center justify-center rounded-xl border border-outline-variant bg-surface-container-low text-headline-md font-headline-md text-on-surface transition-all" onclick="handleInput('2')">2</button>
+<button class="keypad-btn h-20 flex items-center justify-center rounded-xl border border-outline-variant bg-surface-container-low text-headline-md font-headline-md text-on-surface transition-all" onclick="handleInput('3')">3</button>
+<button class="keypad-btn h-20 flex items-center justify-center rounded-xl border border-outline-variant bg-surface-container-low text-headline-md font-headline-md text-on-surface transition-all" onclick="handleInput('4')">4</button>
+<button class="keypad-btn h-20 flex items-center justify-center rounded-xl border border-outline-variant bg-surface-container-low text-headline-md font-headline-md text-on-surface transition-all" onclick="handleInput('5')">5</button>
+<button class="keypad-btn h-20 flex items-center justify-center rounded-xl border border-outline-variant bg-surface-container-low text-headline-md font-headline-md text-on-surface transition-all" onclick="handleInput('6')">6</button>
+<button class="keypad-btn h-20 flex items-center justify-center rounded-xl border border-outline-variant bg-surface-container-low text-headline-md font-headline-md text-on-surface transition-all" onclick="handleInput('7')">7</button>
+<button class="keypad-btn h-20 flex items-center justify-center rounded-xl border border-outline-variant bg-surface-container-low text-headline-md font-headline-md text-on-surface transition-all" onclick="handleInput('8')">8</button>
+<button class="keypad-btn h-20 flex items-center justify-center rounded-xl border border-outline-variant bg-surface-container-low text-headline-md font-headline-md text-on-surface transition-all" onclick="handleInput('9')">9</button>
+<button class="keypad-btn h-20 flex items-center justify-center rounded-xl border border-outline-variant bg-surface-container-low text-label-md text-error uppercase tracking-wider transition-all" onclick="handleClear()">Clear</button>
+<button class="keypad-btn h-20 flex items-center justify-center rounded-xl border border-outline-variant bg-surface-container-low text-headline-md font-headline-md text-on-surface transition-all" onclick="handleInput('0')">0</button>
+<button class="keypad-btn h-20 flex items-center justify-center rounded-xl border border-outline-variant bg-surface-container-low text-on-surface transition-all" onclick="handleBackspace()">
+<span class="material-symbols-outlined">backspace</span>
+</button>
+</div>
+<!-- Footer Actions -->
+<div class="mt-xl text-center">
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors border-b border-transparent hover:border-primary-container pb-1" href="#">
+                    Forgot PIN / Request Admin Reset
+                </a>
+</div>
+</div>
+</main>
+<!-- Bottom Navigation Shell (As per Shared Components JSON) -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 py-2 bg-surface-container-lowest border-t border-outline-variant shadow-xl">
+<button class="flex flex-col items-center justify-center bg-primary-container text-on-primary-container rounded-full p-3 active:scale-90 duration-150">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">login</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant p-3 hover:text-primary transition-all">
+<span class="material-symbols-outlined">help_outline</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant p-3 hover:text-primary transition-all">
+<span class="material-symbols-outlined">info</span>
+</button>
+</nav>
+<!-- Script for PIN Interaction -->
+<script>
+        let currentPin = '';
+        const maxPinLength = 6;
+        const dots = document.querySelectorAll('.pin-dot');
+
+        function updateDisplay() {
+            dots.forEach((dot, index) => {
+                if (index < currentPin.length) {
+                    dot.classList.add('active');
+                } else {
+                    dot.classList.remove('active');
+                }
+            });
+
+            if (currentPin.length === maxPinLength) {
+                // Mock success verification
+                setTimeout(() => {
+                    alert('Secure Shift Entry Authorized. Synchronizing Forecourt Data...');
+                    handleClear();
+                }, 300);
+            }
+        }
+
+        function handleInput(num) {
+            if (currentPin.length < maxPinLength) {
+                currentPin += num;
+                updateDisplay();
+                // Haptic feedback simulation
+                if (window.navigator.vibrate) window.navigator.vibrate(20);
+            }
+        }
+
+        function handleBackspace() {
+            currentPin = currentPin.slice(0, -1);
+            updateDisplay();
+        }
+
+        function handleClear() {
+            currentPin = '';
+            updateDisplay();
+        }
+
+        // Support Keyboard Entry
+        document.addEventListener('keydown', (e) => {
+            if (e.key >= '0' && e.key <= '9') {
+                handleInput(e.key);
+            } else if (e.key === 'Backspace') {
+                handleBackspace();
+            } else if (e.key === 'Escape') {
+                handleClear();
+            }
+        });
+    </script>
+</body></html>

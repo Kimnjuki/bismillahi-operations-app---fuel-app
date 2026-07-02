@@ -1,0 +1,17 @@
+import fs from 'fs';
+const p = 'src/screens/ExpenseEntryScreen.tsx';
+let s = '';
+s += `import React, { useState, useMemo, useCallback, useEffect } from 'react';\n`;
+s += `import {\n`;
+s += `  View, StyleSheet, Text, TouchableOpacity, ScrollView, TextInput,\n`;
+s += `  Modal, FlatList, StatusBar, Alert, Platform, SafeAreaView,\n`;
+s += `} from 'react-native';\n`;
+s += `import { MaterialCommunityIcons } from '@expo/vector-icons';\n`;
+s += `import { useNavigation } from '@react-navigation/native';\n`;
+s += `import { Colors, Typography, Spacing } from '../constants/theme';\n`;
+s += `import { EXPENSE_CATEGORIES, getCategoryIcon, getCategoryColor } from '../constants/expenseCategories';\n`;
+s += `import { generateUUID } from '../utils/uuid';\n`;
+s += `import { internalAccountService } from '../services/internalAccountService';\n`;
+s += `import { supabase } from '../config/supabase';\n`;
+s += `import { useAuth } from '../context/AuthContext';\n\n`;
+fs.writeFileSync(p, s, 'utf8');

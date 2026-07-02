@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo, ReactNode } from 'react';
 import { securityService } from '../services/securityService';
 import { secureApiService } from '../services/secureApiService';
 import { supabase } from '../config/supabase';
@@ -61,12 +61,16 @@ export const SecurityProvider: React.FC<SecurityProviderProps> = ({ children }) 
   const [securityMetrics, setSecurityMetrics] = useState<SecurityMetrics | null>(null);
 
   // Perform security check
-  const performSecurityCheck = async (): Promise<void> => {
+  const performSecurityCheck = useCallback(async (): Promise<void> => {
     try {
+      // Get current authenticated user
+      const { data: authData } = await supabase.auth.getUser();
+      const currentUserId = authData?.user?.id;
+
       // Perform security check with current app state
       const appData = { 
         timestamp: new Date().toISOString(),
-        userAgent: 'Bismillahi Operations App',
+        userAgent: 'Fuelr App',
         version: '1.0.0'
       };
       const checkResult = await securityService.performSecurityCheck(appData);
@@ -76,6 +80,7 @@ export const SecurityProvider: React.FC<SecurityProviderProps> = ({ children }) 
 
       // Log security check event
       await securityService.logSecurityEvent({
+        userId: currentUserId,
         eventType: 'SECURITY_CHECK',
         description: 'Security check performed',
         severity: 'LOW',
@@ -89,16 +94,15 @@ export const SecurityProvider: React.FC<SecurityProviderProps> = ({ children }) 
       setIsSecure(false);
       setSecurityLevel('CRITICAL');
     }
-  };
+  }, []);
 
-  // Get security events
+   // Get security events
   const getSecurityEvents = async (filters?: any): Promise<void> => {
     try {
-      // Get current user ID from auth context
-      const { data: { user } } = await (supabase as any).auth.getUser();
-      if (!user) return;
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData?.user) return;
 
-      const { data, error } = await secureApiService.getSecurityEvents(user.id, filters);
+      const { data, error } = await secureApiService.getSecurityEvents(authData.user.id, filters);
       if (error) {
         console.error('Failed to fetch security events:', error);
         return;
@@ -113,11 +117,10 @@ export const SecurityProvider: React.FC<SecurityProviderProps> = ({ children }) 
   // Get security metrics
   const getSecurityMetrics = async (): Promise<void> => {
     try {
-      // Get current user ID from auth context
-      const { data: { user } } = await (supabase as any).auth.getUser();
-      if (!user) return;
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData?.user) return;
 
-      const { data, error } = await secureApiService.getSecurityMetrics(user.id);
+      const { data, error } = await secureApiService.getSecurityMetrics(authData.user.id);
       if (error) {
         console.error('Failed to fetch security metrics:', error);
         return;
@@ -184,8 +187,8 @@ export const SecurityProvider: React.FC<SecurityProviderProps> = ({ children }) 
     };
   }, [performSecurityCheck]);
 
-  // Context value
-  const contextValue: SecurityContextType = {
+  // Memoized context value to prevent cascading re-renders
+  const contextValue: SecurityContextType = useMemo(() => ({
     isSecure,
     securityLevel,
     lastSecurityCheck,
@@ -196,7 +199,18 @@ export const SecurityProvider: React.FC<SecurityProviderProps> = ({ children }) 
     getSecurityMetrics,
     clearSecurityEvents,
     reportSecurityIssue,
-  };
+  }), [
+    isSecure,
+    securityLevel,
+    lastSecurityCheck,
+    securityEvents,
+    securityMetrics,
+    performSecurityCheck,
+    getSecurityEvents,
+    getSecurityMetrics,
+    clearSecurityEvents,
+    reportSecurityIssue,
+  ]);
 
   return (
     <SecurityContext.Provider value={contextValue}>

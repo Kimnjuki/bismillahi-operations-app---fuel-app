@@ -93,7 +93,7 @@ export const OfflineIndicator: React.FC<OfflineIndicatorProps> = ({
           )}
         </View>
 
-        {showSyncButton && isOnline && (
+        {showSyncButton && (
           <TouchableOpacity
             style={styles.syncButton}
             onPress={handleSyncPress}
@@ -165,4 +165,3 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
 });
-

@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../config/supabase';
 import { User as AppUser, PinAuthCredentials, PinSetupData, UserCreationData } from '../types';
 import * as Crypto from 'expo-crypto';
+import { View } from 'react-native';
 
 // Define AuthContextType locally to match the implementation
 interface AuthContextType {
@@ -17,6 +18,7 @@ interface AuthContextType {
   hasPermission: (requiredRole: string) => boolean;
   clearError: () => void;
   refreshUser: () => Promise<void>;
+  findUserByCode: (userCode: string) => Promise<{ data: any; error: any }>;
 }
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
@@ -42,10 +44,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   // PIN hashing utility
-  const hashPin = useCallback(async (pin: string): Promise<string> => {
+  const hashPin = useCallback(async (pin: string, userCode?: string): Promise<string> => {
+    const salt = userCode ? `${userCode}_fuelr_salt_2024` : 'bismillahi_salt_2024';
     return await Crypto.digestStringAsync(
       Crypto.CryptoDigestAlgorithm.SHA256,
-      pin + 'bismillahi_salt_2024'
+      pin + salt
     );
   }, []);
 
@@ -127,33 +130,34 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [appUser?.id, fetchAppUser]);
 
-  // Initialize auth state - SINGLE useEffect (duplicate removed)
-  useEffect(() => {
-    let isMounted = true;
+   // Initialize auth state - SINGLE useEffect (duplicate removed)
+   useEffect(() => {
+     let isMounted = true;
 
-    const initializeAuth = async () => {
-      try {
-        const cachedUser = await loadCachedUserData();
-        if (!isMounted) return;
-        if (cachedUser) {
-          setAppUser(cachedUser);
-          setIsAuthenticated(true);
-        }
-      } catch (error) {
-        console.error('Error initializing auth:', error);
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    };
+     const initializeAuth = async () => {
+       try {
+         const cachedUser = await loadCachedUserData();
+         if (!isMounted) return;
+         if (cachedUser) {
+           setAppUser(cachedUser);
+           setIsAuthenticated(true);
+         }
+       } catch (error) {
+         console.error('Error initializing auth:', error);
+         setError('Failed to initialize authentication');
+       } finally {
+         if (isMounted) {
+           setLoading(false);
+         }
+       }
+     };
 
-    initializeAuth();
+     initializeAuth();
 
-    return () => {
-      isMounted = false;
-    };
-  }, [loadCachedUserData]);
+     return () => {
+       isMounted = false;
+     };
+   }, [loadCachedUserData, setError]);
 
   // PIN-based sign in function
   const signIn = useCallback(async (credentials: PinAuthCredentials) => {
@@ -162,72 +166,51 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     try {
       const { user_code, pin } = credentials;
-      const pinHash = await hashPin(pin);
 
-      // Demo users for testing (matches actual database users)
-      const demoUsers = [
-        {
-          id: 'deef14c8-311e-4905-abfd-96cf5965b6f3',
-          user_code: 'A001',
-          full_name: 'Admin User',
-          role: 'admin' as const,
-          is_active: true,
-          pin_hash: await hashPin('1234'),
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        },
-        {
-          id: '6f9e4d37-3ed1-4265-97b9-924f18d55b08',
-          user_code: 'A002',
-          full_name: 'Manager User',
-          role: 'manager' as const,
-          is_active: true,
-          pin_hash: await hashPin('1234'),
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        },
-        {
-          id: '92f27abd-3cb3-4802-9c9e-94d62dcfe7ba',
-          user_code: 'A003',
-          full_name: 'Cashier User',
-          role: 'cashier' as const,
-          is_active: true,
-          pin_hash: await hashPin('1234'),
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        },
-        {
-          id: '91b99b89-c4e0-4217-88fa-50c17f92a330',
-          user_code: 'A004',
-          full_name: 'Viewer User',
-          role: 'viewer' as const,
-          is_active: true,
-          pin_hash: await hashPin('1234'),
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+      // Query the user from the database
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('user_code', user_code.toUpperCase())
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') {
+          throw new Error('Invalid user code');
         }
-      ];
+        throw error;
+      }
 
-      // Find user by user_code
-      const userData = demoUsers.find(user => 
-        user.user_code === user_code.toUpperCase() && user.is_active
-      );
-
-      if (!userData) {
+      if (!data) {
         throw new Error('Invalid user code');
       }
 
-      // Verify PIN
-      if (userData.pin_hash !== pinHash) {
+      // Verify PIN (support migration from old hardcoded salt)
+      const newPinHash = await hashPin(pin, data.user_code);
+      const oldPinHash = await hashPin(pin);
+      let pinValid = data.pin_hash === newPinHash;
+      
+      if (!pinValid && data.pin_hash === oldPinHash) {
+        pinValid = true;
+        const { error: updateError } = await supabase
+          .from('users')
+          .update({ pin_hash: newPinHash })
+          .eq('id', data.id);
+        if (updateError) {
+          console.error('Failed to migrate PIN hash:', updateError);
+        }
+      }
+
+      if (!pinValid) {
         throw new Error('Invalid PIN');
       }
 
       // Set user data
-      setAppUser(userData);
+      setAppUser(data);
       setIsAuthenticated(true);
-      await cacheUserData(userData);
+      await cacheUserData(data);
 
-      console.log(`✅ Login successful: ${userData.full_name} (${userData.role})`);
+      console.log(`✅ Login successful: ${data.full_name} (${data.role})`);
       return { error: null };
     } catch (error: any) {
       console.error('Sign in error:', error);
@@ -303,7 +286,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         throw new Error('PIN must be at least 4 digits');
       }
 
-      const pinHash = await hashPin(pin);
+      const pinHash = await hashPin(pin, user_code);
 
       // Update user with PIN
       const { error } = await supabase
@@ -345,6 +328,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [cacheUserData]);
 
   // Permission check function
+  const findUserByCode = useCallback(async (userCode: string): Promise<{ data: any; error: any }> => {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, full_name, role, pin_hash')
+        .eq('user_code', userCode.toUpperCase())
+        .single();
+      if (error) throw error;
+      return { data, error: null };
+    } catch (err: any) {
+      return { data: null, error: err };
+    }
+  }, []);
+
   const hasPermission = useCallback((requiredRole: string) => {
     if (!appUser) return false;
     
@@ -379,6 +376,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     hasPermission,
     clearError,
     refreshUser,
+    findUserByCode,
   }), [
     appUser,
     isAuthenticated,
@@ -391,7 +389,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     hasPermission,
     clearError,
     refreshUser,
+    findUserByCode,
   ]);
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      <View testID="auth-provider">
+        {children}
+      </View>
+    </AuthContext.Provider>
+  );
 };

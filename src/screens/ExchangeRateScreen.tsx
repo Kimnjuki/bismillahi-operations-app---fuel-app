@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -9,6 +9,7 @@ import {
   SafeAreaView,
   Alert,
   RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,43 +25,46 @@ interface ExchangeRate {
   created_by: string;
 }
 
+// Static sample data - defined OUTSIDE component to prevent recreation on each render
+const DEFAULT_RATE = 2300;
+const SAMPLE_RATES: ExchangeRate[] = [
+  {
+    id: '1',
+    rate: DEFAULT_RATE,
+    effective_date: '2026-06-11',
+    created_at: '2026-06-11T10:00:00Z',
+    created_by: 'system',
+  },
+  {
+    id: '2',
+    rate: DEFAULT_RATE,
+    effective_date: '2026-06-10',
+    created_at: '2026-06-10T10:00:00Z',
+    created_by: 'system',
+  },
+  {
+    id: '3',
+    rate: DEFAULT_RATE,
+    effective_date: '2026-06-09',
+    created_at: '2026-06-09T10:00:00Z',
+    created_by: 'system',
+  },
+];
+
 export default function ExchangeRateScreen() {
   const { appUser } = useAuth();
   const navigation = useNavigation();
   const [currentRate, setCurrentRate] = useState<ExchangeRate | null>(null);
   const [rateHistory, setRateHistory] = useState<ExchangeRate[]>([]);
   const [newRate, setNewRate] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-
-  // Sample data with default rate: 1 USD = 2300 CDF
-  const sampleRates: ExchangeRate[] = [
-    {
-      id: '1',
-      rate: 2300,
-      effective_date: new Date().toISOString().split('T')[0],
-      created_at: new Date().toISOString(),
-      created_by: appUser?.id || '',
-    },
-    {
-      id: '2',
-      rate: 2300,
-      effective_date: new Date(Date.now() - 86400000).toISOString().split('T')[0],
-      created_at: new Date(Date.now() - 86400000).toISOString(),
-      created_by: appUser?.id || '',
-    },
-    {
-      id: '3',
-      rate: 2300,
-      effective_date: new Date(Date.now() - 172800000).toISOString().split('T')[0],
-      created_at: new Date(Date.now() - 172800000).toISOString(),
-      created_by: appUser?.id || '',
-    },
-  ];
+  const [settingRate, setSettingRate] = useState(false);
+  const mountedRef = useRef(true);
 
   const loadExchangeRates = useCallback(async () => {
     try {
-      setLoading(true);
+      if (!mountedRef.current) return;
       
       // Try to fetch from database
       const { data, error } = await supabase
@@ -68,26 +72,30 @@ export default function ExchangeRateScreen() {
         .select('*')
         .order('effective_date', { ascending: false });
 
-      if (error) throw error;
+      if (!mountedRef.current) return;
       
-      if (data && data.length > 0) {
+      if (!error && data && data.length > 0) {
         setCurrentRate(data[0]);
         setRateHistory(data);
       } else {
         // Use sample data if no real data
-        setCurrentRate(sampleRates[0]);
-        setRateHistory(sampleRates);
+        setCurrentRate(SAMPLE_RATES[0]);
+        setRateHistory(SAMPLE_RATES);
       }
     } catch (error) {
       console.error('Error loading exchange rates:', error);
-      // Use sample data on error
-      setCurrentRate(sampleRates[0]);
-      setRateHistory(sampleRates);
+      if (mountedRef.current) {
+        // Use sample data on error
+        setCurrentRate(SAMPLE_RATES[0]);
+        setRateHistory(SAMPLE_RATES);
+      }
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (mountedRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
-  }, [sampleRates]);
+  }, []); // Empty dependency - static data doesn't need to be in deps
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -149,7 +157,7 @@ export default function ExchangeRateScreen() {
           style: 'default',
           onPress: async () => {
             try {
-              setLoading(true);
+              setSettingRate(true);
               
               // Try to insert into database
               const { error } = await supabase
@@ -196,7 +204,7 @@ export default function ExchangeRateScreen() {
 
               Alert.alert('Success', 'Daily exchange rate set successfully (offline)');
             } finally {
-              setLoading(false);
+              setSettingRate(false);
             }
           }
         }
@@ -204,18 +212,40 @@ export default function ExchangeRateScreen() {
     );
   };
 
-  const formatDate = (dateString: string) => {
+  const formatDate = useCallback((dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'long',
       day: 'numeric'
     });
-  };
+  }, []);
 
-  const calculateInverseRate = (rate: number) => {
+  const calculateInverseRate = useCallback((rate: number) => {
     return 1 / rate;
-  };
+  }, []);
+
+  // Pre-compute inverse rate to avoid recalculation on each render
+  const inverseRate = currentRate 
+    ? (1 / currentRate.rate).toFixed(8)
+    : (1 / DEFAULT_RATE).toFixed(8);
+
+  const displayRate = currentRate 
+    ? currentRate.rate.toLocaleString() 
+    : DEFAULT_RATE.toLocaleString();
+
+  if (loading && !currentRate) {
+    return (
+      <LinearGradient colors={['#312C51', '#48426D']} style={styles.container}>
+        <SafeAreaView style={styles.safeArea}>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#F0C38E" />
+            <Text style={styles.loadingText}>Loading exchange rates...</Text>
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
+    );
+  }
 
   return (
     <LinearGradient colors={['#312C51', '#48426D']} style={styles.container}>
@@ -245,7 +275,7 @@ export default function ExchangeRateScreen() {
                   <Text style={styles.usdText}>1 USD</Text>
                   <Text style={styles.equalsText}> = </Text>
                   <Text style={styles.cdfText}>
-                    {currentRate ? currentRate.rate.toLocaleString() : '2,880'} CDF
+                    {displayRate} CDF
                   </Text>
                 </Text>
               </View>
@@ -254,7 +284,7 @@ export default function ExchangeRateScreen() {
                   <Text style={styles.cdfText}>1 CDF</Text>
                   <Text style={styles.equalsText}> = </Text>
                   <Text style={styles.usdText}>
-                    {currentRate ? calculateInverseRate(currentRate.rate).toFixed(8) : '0.00034722'} USD
+                    {inverseRate} USD
                   </Text>
                 </Text>
               </View>
@@ -273,18 +303,22 @@ export default function ExchangeRateScreen() {
                   style={styles.rateInput}
                   value={newRate}
                   onChangeText={setNewRate}
-                  placeholder="Enter CDF rate (e.g., 2880)"
+                  placeholder={`Enter CDF rate (e.g., ${DEFAULT_RATE})`}
                   placeholderTextColor="rgba(255, 255, 255, 0.5)"
                   keyboardType="numeric"
                 />
                 <TouchableOpacity 
-                  style={[styles.updateButton, loading && styles.updateButtonDisabled]} 
+                  style={[styles.updateButton, settingRate && styles.updateButtonDisabled]} 
                   onPress={handleUpdateRate}
-                  disabled={loading}
+                  disabled={settingRate}
                 >
-                  <Text style={styles.updateButtonText}>
-                    {loading ? 'Setting...' : 'Set Daily Rate'}
-                  </Text>
+                  {settingRate ? (
+                    <ActivityIndicator size="small" color="#312C51" />
+                  ) : (
+                    <Text style={styles.updateButtonText}>
+                      Set Daily Rate
+                    </Text>
+                  )}
                 </TouchableOpacity>
               </View>
             </View>
@@ -296,25 +330,32 @@ export default function ExchangeRateScreen() {
             <Text style={styles.sectionSubtitle}>
               Fixed exchange rates set by administrators
             </Text>
-            {rateHistory.map((rate, index) => (
-              <View key={rate.id} style={styles.historyCard}>
-                <View style={styles.historyRateContainer}>
-                  <Text style={styles.historyRateText}>
-                    <Text style={styles.usdText}>1 USD</Text>
-                    <Text style={styles.equalsText}> = </Text>
-                    <Text style={styles.cdfText}>{rate.rate.toLocaleString()} CDF</Text>
-                  </Text>
-                  <Text style={styles.historyRateText}>
-                    <Text style={styles.cdfText}>1 CDF</Text>
-                    <Text style={styles.equalsText}> = </Text>
-                    <Text style={styles.usdText}>{calculateInverseRate(rate.rate).toFixed(8)} USD</Text>
+            {rateHistory.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Ionicons name="information-circle-outline" size={40} color="rgba(255,255,255,0.5)" />
+                <Text style={styles.emptyStateText}>No exchange rates recorded yet</Text>
+              </View>
+            ) : (
+              rateHistory.map((rate) => (
+                <View key={rate.id} style={styles.historyCard}>
+                  <View style={styles.historyRateContainer}>
+                    <Text style={styles.historyRateText}>
+                      <Text style={styles.usdText}>1 USD</Text>
+                      <Text style={styles.equalsText}> = </Text>
+                      <Text style={styles.cdfText}>{rate.rate.toLocaleString()} CDF</Text>
+                    </Text>
+                    <Text style={styles.historyRateText}>
+                      <Text style={styles.cdfText}>1 CDF</Text>
+                      <Text style={styles.equalsText}> = </Text>
+                      <Text style={styles.usdText}>{(1 / rate.rate).toFixed(8)} USD</Text>
+                    </Text>
+                  </View>
+                  <Text style={styles.historyDateText}>
+                    {formatDate(rate.effective_date)}
                   </Text>
                 </View>
-                <Text style={styles.historyDateText}>
-                  {formatDate(rate.effective_date)}
-                </Text>
-              </View>
-            ))}
+              ))
+            )}
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -331,6 +372,29 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 16,
+    marginTop: 12,
+  },
+  emptyState: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyStateText: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 16,
+    marginTop: 12,
+    textAlign: 'center',
   },
   header: {
     flexDirection: 'row',

@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Fuelr - The Gateway</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-secondary": "#053900",
+                        "on-tertiary-fixed-variant": "#474747",
+                        "on-secondary-container": "#0f6d00",
+                        "tertiary-fixed-dim": "#c8c6c6",
+                        "surface-dim": "#131313",
+                        "primary-container": "#ffb300",
+                        "outline": "#9e8e78",
+                        "outline-variant": "#514532",
+                        "error": "#ffb4ab",
+                        "surface-bright": "#393939",
+                        "on-surface-variant": "#d6c4ac",
+                        "surface-container-highest": "#353534",
+                        "tertiary-fixed": "#e4e2e1",
+                        "surface-tint": "#ffba38",
+                        "background": "#121212",
+                        "inverse-on-surface": "#313030",
+                        "surface-container": "#201f1f",
+                        "on-primary-fixed": "#281900",
+                        "tertiary": "#dfdddc",
+                        "on-surface": "#e5e2e1",
+                        "primary-fixed": "#ffdeac",
+                        "surface-container-high": "#2a2a2a",
+                        "surface": "#131313",
+                        "inverse-primary": "#7e5700",
+                        "on-primary": "#432c00",
+                        "on-error-container": "#ffdad6",
+                        "secondary": "#d7ffc5",
+                        "on-secondary-fixed": "#022100",
+                        "primary-fixed-dim": "#ffba38",
+                        "tertiary-container": "#c3c1c1",
+                        "on-error": "#690005",
+                        "error-container": "#93000a",
+                        "secondary-fixed-dim": "#2ae500",
+                        "secondary-container": "#2ff801",
+                        "on-tertiary-fixed": "#1b1c1c",
+                        "surface-variant": "#353534",
+                        "inverse-surface": "#e5e2e1",
+                        "on-tertiary-container": "#4f4f4f",
+                        "surface-container-low": "#1c1b1b",
+                        "primary": "#ffd79b",
+                        "on-background": "#e5e2e1",
+                        "on-secondary-fixed-variant": "#095300",
+                        "on-primary-fixed-variant": "#604100",
+                        "secondary-fixed": "#79ff5b",
+                        "on-tertiary": "#303030",
+                        "on-primary-container": "#6b4900",
+                        "surface-container-lowest": "#0e0e0e"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "lg": "32px",
+                        "md": "24px",
+                        "xs": "8px",
+                        "margin-mobile": "20px",
+                        "gutter-mobile": "12px",
+                        "xl": "48px",
+                        "sm": "16px",
+                        "base": "4px"
+                    },
+                    "fontFamily": {
+                        "body-md": ["Inter"],
+                        "headline-lg-mobile": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "label-sm": ["Inter"],
+                        "label-md": ["Inter"],
+                        "body-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "headline-lg-mobile": ["28px", {"lineHeight": "34px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "headline-md": ["24px", {"lineHeight": "30px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "label-sm": ["12px", {"lineHeight": "16px", "fontWeight": "500"}],
+                        "label-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            background-color: #121212;
+            color: #e5e2e1;
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+        
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+
+        .glow-primary:focus-within {
+            box-shadow: 0 0 15px rgba(255, 179, 0, 0.4);
+        }
+
+        .toggle-slide {
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .rugged-font {
+            letter-spacing: -0.01em;
+            font-weight: 700;
+        }
+
+        /* Tonal Layering */
+        .surface-l1 { background-color: #1E1E1E; border: 1px solid #2E2E2E; }
+        .surface-l2 { background-color: #2A2A2A; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-primary-container selection:text-on-primary-container">
+<!-- Header Navigation Shell (Suppressed due to transactional intent, but using TopAppBar logic for identity) -->
+<header class="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-md border-b border-outline-variant/30">
+<div class="flex items-center justify-between px-margin-mobile h-16 w-full max-w-7xl mx-auto">
+<div class="flex items-center gap-3">
+<img alt="Fuelr Logo" class="w-10 h-10 rounded-lg shadow-lg" src="https://lh3.googleusercontent.com/aida/AP1WRLu4pdYdlvIB6487YHPkaPe_AdGyOQzbZco7szFykieIX7nlbLmfn1y-L-Go5NccDs6Q3x6k4-08CoXkDniNG4SD9tK44B1ETNRWmRAInR0ksvOo2SepgSbHxPux1JTS6RGLTEd6WdYue5b7VkiJkk7PnhmrVRkhcZyLmW8BzIbJhHnCr5_4aWbrJBhgfQJ3i7XJrkH6A3BDfmEm51b4zMX57PRKsdf3l_Bt7PKRzVFqRp8bynXkHY7q1AaA"/>
+<h1 class="font-headline-md text-headline-md text-primary tracking-tight rugged-font">Fuelr</h1>
+</div>
+<div class="hidden md:flex items-center gap-6">
+<span class="material-symbols-outlined text-on-surface-variant">shield</span>
+<span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest">Enterprise Secure</span>
+</div>
+</div>
+</header>
+<main class="flex-grow flex items-center justify-center px-margin-mobile pt-20 pb-12">
+<div class="w-full max-w-md space-y-lg animate-in fade-in slide-in-from-bottom-4 duration-700">
+<!-- Branding Section -->
+<div class="text-center space-y-xs">
+<h2 class="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface rugged-font">Welcome to Fuelr</h2>
+<p class="font-body-md text-body-md text-on-surface-variant max-w-xs mx-auto">Precision energy logistics and station management.</p>
+</div>
+<!-- Login Container -->
+<div class="surface-l1 rounded-xl p-md space-y-md shadow-2xl relative overflow-hidden">
+<!-- Subtle Gradient Overlay -->
+<div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-primary-container/50 to-transparent"></div>
+<!-- Toggle Selector -->
+<div class="p-1 bg-surface-container-lowest rounded-lg flex relative">
+<div class="absolute inset-y-1 left-1 w-[calc(50%-4px)] bg-primary-container rounded-md shadow-md toggle-slide" id="toggle-indicator"></div>
+<button class="relative z-10 flex-1 py-2.5 font-label-md text-label-md transition-colors duration-300 text-on-primary-container" id="staff-btn" onclick="toggleLogin('staff')">
+                        Station Staff
+                    </button>
+<button class="relative z-10 flex-1 py-2.5 font-label-md text-label-md transition-colors duration-300 text-on-surface-variant" id="mgmt-btn" onclick="toggleLogin('mgmt')">
+                        Management
+                    </button>
+</div>
+<!-- Input Field -->
+<div class="space-y-xs">
+<div class="relative group glow-primary rounded-lg transition-all duration-300">
+<input class="peer w-full h-14 bg-surface-container-low border border-outline-variant/50 rounded-lg px-4 pt-5 pb-1 text-on-surface font-body-md focus:outline-none focus:border-primary-container transition-all placeholder-transparent" id="access-code" placeholder="Access Code" type="text"/>
+<label class="absolute left-4 top-1 text-[10px] uppercase tracking-wider font-bold text-primary-container/80 transition-all peer-placeholder-shown:text-body-md peer-placeholder-shown:top-4 peer-placeholder-shown:text-on-surface-variant/60 peer-focus:top-1 peer-focus:text-[10px] peer-focus:text-primary-container" for="access-code">
+                            Enter Access ID
+                        </label>
+<div class="absolute right-4 top-4 text-on-surface-variant/40">
+<span class="material-symbols-outlined" data-icon="key">key</span>
+</div>
+</div>
+<div class="flex items-center justify-between px-1">
+<span class="font-label-sm text-label-sm text-on-surface-variant/60">6-digit alphanumeric code</span>
+<a class="font-label-sm text-label-sm text-primary-container hover:underline transition-all" href="#">Forgot ID?</a>
+</div>
+</div>
+<!-- Primary Action -->
+<button class="w-full bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container py-4 rounded-xl font-headline-md text-headline-md transition-all active:scale-[0.98] shadow-lg shadow-primary-container/10 flex items-center justify-center gap-3">
+                    Continue
+                    <span class="material-symbols-outlined" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+<!-- Footer Meta -->
+<div class="flex flex-col items-center gap-md pt-md">
+<div class="flex gap-sm">
+<div class="flex items-center gap-1.5 px-3 py-1 bg-secondary-container/10 rounded-full border border-secondary-container/20">
+<span class="w-2 h-2 rounded-full bg-secondary-fixed animate-pulse"></span>
+<span class="font-label-sm text-label-sm text-secondary-fixed">System Online</span>
+</div>
+</div>
+<p class="font-label-sm text-label-sm text-on-surface-variant/40 text-center uppercase tracking-widest">
+                    Version 4.2.0-Prime • Secure Auth 
+                </p>
+</div>
+</div>
+</main>
+<!-- Interactive micro-effects for the login page -->
+<script>
+        function toggleLogin(mode) {
+            const indicator = document.getElementById('toggle-indicator');
+            const staffBtn = document.getElementById('staff-btn');
+            const mgmtBtn = document.getElementById('mgmt-btn');
+            const label = document.querySelector('label[for="access-code"]');
+            
+            if (mode === 'staff') {
+                indicator.style.transform = 'translateX(0)';
+                staffBtn.classList.replace('text-on-surface-variant', 'text-on-primary-container');
+                mgmtBtn.classList.replace('text-on-primary-container', 'text-on-surface-variant');
+                label.textContent = 'Enter Staff ID';
+            } else {
+                indicator.style.transform = 'translateX(100%)';
+                mgmtBtn.classList.replace('text-on-surface-variant', 'text-on-primary-container');
+                staffBtn.classList.replace('text-on-primary-container', 'text-on-surface-variant');
+                label.textContent = 'Enter Admin Email';
+            }
+        }
+
+        // Simple parallax movement on mouse for high-end feel
+        document.addEventListener('mousemove', (e) => {
+            const moveX = (e.clientX - window.innerWidth / 2) * 0.01;
+            const moveY = (e.clientY - window.innerHeight / 2) * 0.01;
+            document.querySelector('main').style.transform = `translate(${moveX}px, ${moveY}px)`;
+        });
+    </script>
+</body></html>

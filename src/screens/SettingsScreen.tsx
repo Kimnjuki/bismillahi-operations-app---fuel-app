@@ -152,7 +152,7 @@ export default function SettingsScreen() {
 
           {/* Footer */}
           <View style={styles.footer}>
-            <Text style={styles.footerText}>Bismillahi Operations v1.0.0</Text>
+            <Text style={styles.footerText}>Fuelr v1.0</Text>
             <Text style={styles.footerText}>© 2024 All rights reserved</Text>
           </View>
 

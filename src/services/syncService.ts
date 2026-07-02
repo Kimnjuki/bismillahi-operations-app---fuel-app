@@ -37,7 +37,7 @@ const TABLE_CONFIGS: TableSyncConfig[] = [
   {
     table: 'daily_sales',
     primaryKey: 'id',
-    syncFields: ['id', 'sale_type', 'pump_number', 'fuel_type', 'volume_liters', 'quantity', 'price_per_liter', 'price_per_drum', 'total_amount', 'payment_method', 'sale_date', 'created_by', 'created_at'],
+    syncFields: ['id', 'sale_type', 'pump_number', 'fuel_type', 'volume_liters', 'price_per_liter', 'total_amount', 'payment_method', 'sale_date', 'created_by', 'created_at'],
     orderBy: 'created_at',
     limit: 1000,
   },

@@ -16,15 +16,18 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { fuelDeliveryService } from '../services/fuelDeliveryService';
 import { formatCurrency } from '../constants/currency';
-import { TaxPayment, Transporter, PaymentStatus } from '../types';
+import { TaxPayment, Transporter, Station, PaymentStatus } from '../types';
 
 export default function TaxPaymentScreen() {
   const { appUser } = useAuth();
   const navigation = useNavigation();
   const [taxPayments, setTaxPayments] = useState<TaxPayment[]>([]);
   const [transporters, setTransporters] = useState<Transporter[]>([]);
+  const [stations, setStations] = useState<Station[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [filterTruckId, setFilterTruckId] = useState('');
+  const [filterStationId, setFilterStationId] = useState('');
 
   // Form state
   const [formData, setFormData] = useState({
@@ -34,6 +37,8 @@ export default function TaxPaymentScreen() {
     borderPoint: '',
     truckId: '',
     transporterId: '',
+    stationId: '',
+    deductedAccountType: 'CDF',
     paymentReference: '',
     notes: '',
   });
@@ -41,17 +46,19 @@ export default function TaxPaymentScreen() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showForm, setShowForm] = useState(false);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (stationId?: string, truckId?: string) => {
     try {
       setLoading(true);
       
-      const [paymentsResponse, transportersResponse] = await Promise.all([
-        fuelDeliveryService.getTaxPayments(),
-        fuelDeliveryService.getTransporters()
+      const [paymentsResponse, transportersResponse, stationsResponse] = await Promise.all([
+        fuelDeliveryService.getTaxPayments(stationId, truckId),
+        fuelDeliveryService.getTransporters(),
+        fuelDeliveryService.getStations()
       ]);
 
       if (paymentsResponse.success) setTaxPayments(paymentsResponse.data || []);
       if (transportersResponse.success) setTransporters(transportersResponse.data || []);
+      if (stationsResponse.success) setStations(stationsResponse.data || []);
 
     } catch (error) {
       console.error('Error loading data:', error);
@@ -62,10 +69,33 @@ export default function TaxPaymentScreen() {
     }
   }, []);
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
+  useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (transporters.length > 0 && !formData.transporterId) {
+      const gasnet = transporters.find(t => t.transporter_name === 'Gasnet Energy');
+      if (gasnet) {
+        setFormData(prev => ({ ...prev, transporterId: gasnet.id }));
+      }
+    }
+  }, [transporters, formData.transporterId]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadData(filterStationId || undefined, filterTruckId || undefined);
+  }, [loadData, filterStationId, filterTruckId]);
+
+  const handleApplyFilters = () => {
+    loadData(filterStationId || undefined, filterTruckId || undefined);
+  };
+
+  const handleClearFilters = () => {
+    setFilterTruckId('');
+    setFilterStationId('');
+    loadData();
+  };
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -88,6 +118,10 @@ export default function TaxPaymentScreen() {
 
     if (!formData.transporterId) {
       newErrors.transporterId = 'Transporter is required';
+    }
+
+    if (!formData.stationId) {
+      newErrors.stationId = 'Station is required';
     }
 
     if (!formData.paymentReference.trim()) {
@@ -123,6 +157,8 @@ export default function TaxPaymentScreen() {
         border_point: formData.borderPoint.trim(),
         truck_id: formData.truckId.trim(),
         transporter_id: formData.transporterId,
+        station_id: formData.stationId || undefined,
+        deducted_account_type: formData.deductedAccountType,
         payment_reference: formData.paymentReference.trim(),
         status: 'paid' as PaymentStatus,
         notes: formData.notes.trim() || undefined,
@@ -140,7 +176,9 @@ export default function TaxPaymentScreen() {
           amountUsd: '',
           borderPoint: '',
           truckId: '',
-          transporterId: '',
+          transporterId: formData.transporterId,
+          stationId: '',
+          deductedAccountType: 'CDF',
           paymentReference: '',
           notes: '',
         });
@@ -304,6 +342,11 @@ export default function TaxPaymentScreen() {
         </View>
         
         <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>Station:</Text>
+          <Text style={styles.detailValue}>{payment.station?.station_name || payment.station?.name || 'N/A'}</Text>
+        </View>
+        
+        <View style={styles.detailRow}>
           <Text style={styles.detailLabel}>Border Point:</Text>
           <Text style={styles.detailValue}>{payment.border_point}</Text>
         </View>
@@ -311,6 +354,11 @@ export default function TaxPaymentScreen() {
         <View style={styles.detailRow}>
           <Text style={styles.detailLabel}>Transporter:</Text>
           <Text style={styles.detailValue}>{payment.transporter?.transporter_name}</Text>
+        </View>
+        
+        <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>Deducted From:</Text>
+          <Text style={styles.detailValue}>{payment.deducted_account_type || 'CDF'} Account</Text>
         </View>
         
         <View style={styles.detailRow}>
@@ -365,6 +413,59 @@ export default function TaxPaymentScreen() {
             </TouchableOpacity>
           </View>
 
+          {/* Filter Section */}
+          <View style={styles.filterSection}>
+            <Text style={styles.sectionTitle}>Filter Tax Payments</Text>
+            <View style={styles.filterRow}>
+              <View style={styles.filterInputWrap}>
+                <Text style={styles.inputLabel}>Truck ID</Text>
+                <TextInput
+                  style={styles.filterInput}
+                  value={filterTruckId}
+                  onChangeText={setFilterTruckId}
+                  placeholder="Enter Truck ID"
+                  placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                />
+              </View>
+              <View style={[styles.inputContainer, { flex: 1 }]}>
+                <Text style={styles.inputLabel}>Station</Text>
+                <TouchableOpacity
+                  style={styles.picker}
+                  onPress={() => {
+                    Alert.alert(
+                      'Select Station',
+                      '',
+                      stations.map(option => ({
+                        text: option.station_name || option.name,
+                        onPress: () => setFilterStationId(option.id)
+                      })).concat([{ text: 'All Stations', onPress: () => setFilterStationId('') }])
+                    );
+                  }}
+                >
+                  <Text style={[
+                    styles.pickerText,
+                    !filterStationId && styles.placeholderText
+                  ]}>
+                    {filterStationId 
+                      ? stations.find(o => o.id === filterStationId)?.station_name || stations.find(o => o.id === filterStationId)?.name || 'All Stations'
+                      : 'All Stations'}
+                  </Text>
+                  <Ionicons name="chevron-down" size={20} color="#ffffff" />
+                </TouchableOpacity>
+              </View>
+            </View>
+            <View style={styles.filterActions}>
+              <TouchableOpacity style={styles.filterButton} onPress={handleApplyFilters}>
+                <Ionicons name="search" size={16} color="#312C51" />
+                <Text style={styles.filterButtonText}>Apply Filters</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.filterClearButton} onPress={handleClearFilters}>
+                <Ionicons name="refresh" size={16} color="#F0C38E" />
+                <Text style={styles.filterClearButtonText}>Clear</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
           {/* Add New Payment Form */}
           {showForm && (
             <View style={styles.formSection}>
@@ -380,6 +481,16 @@ export default function TaxPaymentScreen() {
                 id: t.id,
                 name: `${t.transporter_name} (${t.transporter_code})`
               })), 'Select Transporter')}
+              
+               {renderPicker('Station', 'stationId', stations.map(s => ({
+                 id: s.id,
+                 name: s.station_name || s.name || ''
+               })), 'Select Station')}
+
+              {renderPicker('Deducted Account Type', 'deductedAccountType', [
+                { id: 'CDF', name: 'CDF Account' },
+                { id: 'USD', name: 'USD Account' }
+              ], 'Select Account Type')}
               
               {renderInput('Payment Reference', 'paymentReference', 'Enter payment reference')}
               {renderInput('Notes', 'notes', 'Enter notes (optional)', 'default', true)}
@@ -602,5 +713,63 @@ const styles = StyleSheet.create({
   emptySubtext: {
     fontSize: 14,
     color: 'rgba(255, 255, 255, 0.5)',
+  },
+  filterSection: {
+    paddingHorizontal: 16,
+    marginBottom: 20,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  filterActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 12,
+  },
+  filterButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#F0C38E',
+    borderRadius: 8,
+    paddingVertical: 12,
+  },
+  filterButtonText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#312C51',
+  },
+  filterClearButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  filterClearButtonText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#F0C38E',
+  },
+  filterInputWrap: {
+    flex: 1,
+  },
+  filterInput: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#ffffff',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
 });

@@ -13,6 +13,17 @@ import {
   ApiResponse 
 } from '../types';
 
+interface TruckDeliveredSummary {
+  truck_id: string;
+  transporter_name: string;
+  station_name: string;
+  total_liters: number;
+  deliveries_count: number;
+  first_delivery_date: string;
+  last_delivery_date: string;
+  products: string[];
+}
+
 class FuelDeliveryService {
   // Fuel Deliveries
   async getFuelDeliveries(): Promise<ApiResponse<FuelDelivery[]>> {
@@ -244,12 +255,22 @@ class FuelDeliveryService {
   }
 
   // Tax Payments
-  async getTaxPayments(): Promise<ApiResponse<TaxPayment[]>> {
+  async getTaxPayments(stationId?: string, truckId?: string): Promise<ApiResponse<TaxPayment[]>> {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('tax_payments')
         .select('*')
         .order('payment_date', { ascending: false });
+
+      if (stationId) {
+        query = query.eq('station_id', stationId);
+      }
+
+      if (truckId) {
+        query = query.eq('truck_id', truckId);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -266,6 +287,14 @@ class FuelDeliveryService {
         success: false,
       };
     }
+  }
+
+  async getTaxPaymentsByStation(stationId: string): Promise<ApiResponse<TaxPayment[]>> {
+    return this.getTaxPayments(stationId);
+  }
+
+  async getTaxPaymentsByTruck(truckId: string): Promise<ApiResponse<TaxPayment[]>> {
+    return this.getTaxPayments(undefined, truckId);
   }
 
   async createTaxPayment(payment: Omit<TaxPayment, 'id' | 'created_at' | 'updated_at'>): Promise<ApiResponse<TaxPayment>> {
@@ -299,7 +328,7 @@ class FuelDeliveryService {
       let query = supabase
         .from('truck_transactions')
         .select('*')
-        .order('transaction_date', { ascending: false });
+        .order('created_at', { ascending: false });
 
       if (truckId) {
         query = query.eq('truck_id', truckId);
@@ -478,6 +507,73 @@ class FuelDeliveryService {
       };
     } catch (error) {
       console.error('Error fetching delivery summary:', error);
+      return {
+        data: null,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        success: false,
+      };
+    }
+  }
+
+  async getTrucksDelivered(transporterId?: string): Promise<ApiResponse<TruckDeliveredSummary[]>> {
+    try {
+      let query = supabase
+        .from('fuel_deliveries')
+        .select('truck_id, quantity_liters, delivery_date, station_id, transporter_id, product');
+
+      if (transporterId) {
+        query = query.eq('transporter_id', transporterId);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        return { data: [], error: null, success: true };
+      }
+
+      const grouped: Record<string, TruckDeliveredSummary> = {};
+
+      data.forEach((delivery: any) => {
+        const truckId = delivery.truck_id;
+        const stationName = delivery.station?.station_name || 'Unknown Station';
+        const transporterName = delivery.transporter?.transporter_name || 'Unknown Transporter';
+
+        if (!grouped[truckId]) {
+          grouped[truckId] = {
+            truck_id: truckId,
+            transporter_name: transporterName,
+            station_name: stationName,
+            total_liters: 0,
+            deliveries_count: 0,
+            first_delivery_date: delivery.delivery_date,
+            last_delivery_date: delivery.delivery_date,
+            products: [],
+          };
+        }
+
+        grouped[truckId].total_liters += Number(delivery.quantity_liters) || 0;
+        grouped[truckId].deliveries_count += 1;
+        grouped[truckId].first_delivery_date = delivery.delivery_date < grouped[truckId].first_delivery_date
+          ? delivery.delivery_date
+          : grouped[truckId].first_delivery_date;
+        grouped[truckId].last_delivery_date = delivery.delivery_date > grouped[truckId].last_delivery_date
+          ? delivery.delivery_date
+          : grouped[truckId].last_delivery_date;
+
+        if (delivery.product && !grouped[truckId].products.includes(delivery.product)) {
+          grouped[truckId].products.push(delivery.product);
+        }
+      });
+
+      return {
+        data: Object.values(grouped),
+        error: null,
+        success: true,
+      };
+    } catch (error) {
+      console.error('Error fetching trucks delivered:', error);
       return {
         data: null,
         error: error instanceof Error ? error.message : 'Unknown error',

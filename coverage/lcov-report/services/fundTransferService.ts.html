@@ -342,7 +342,9 @@
 <a name='L277'></a><a href='#L277'>277</a>
 <a name='L278'></a><a href='#L278'>278</a>
 <a name='L279'></a><a href='#L279'>279</a>
-<a name='L280'></a><a href='#L280'>280</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L280'></a><a href='#L280'>280</a>
+<a name='L281'></a><a href='#L281'>281</a>
+<a name='L282'></a><a href='#L282'>282</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -606,8 +608,10 @@
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -659,55 +663,55 @@ class FundTransferService {
     }
   }
 &nbsp;
-  // Create new fund transfer
-<span class="fstat-no" title="function not covered" >  as</span>ync createFundTransfer(transfer: Omit&lt;FundTransfer, 'id' | 'created_at' | 'updated_at'&gt;): Promise&lt;ApiResponse&lt;FundTransfer&gt;&gt; {
-<span class="cstat-no" title="statement not covered" >    try {</span>
-      // First, try to update account balances
-<span class="cstat-no" title="statement not covered" >      await this.updateAccountBalances(transfer.from_account, transfer.to_account, transfer.amount);</span>
+   // Create new fund transfer
+<span class="fstat-no" title="function not covered" >   as</span>ync createFundTransfer(transfer: Omit&lt;FundTransfer, 'id' | 'created_at' | 'updated_at'&gt;): Promise&lt;ApiResponse&lt;FundTransfer&gt;&gt; {
+<span class="cstat-no" title="statement not covered" >     try {</span>
+       // First, try to update account balances with proper currency conversion
+<span class="cstat-no" title="statement not covered" >       await this.updateAccountBalances(transfer);</span>
 &nbsp;
-      const { data, error } = <span class="cstat-no" title="statement not covered" >await supabase</span>
-        .from('fund_transfers')
-        .insert([transfer])
-        .select()
-        .single();
+       const { data, error } = <span class="cstat-no" title="statement not covered" >await supabase</span>
+         .from('fund_transfers')
+         .insert([transfer])
+         .select()
+         .single();
 &nbsp;
-<span class="cstat-no" title="statement not covered" >      if (error) {</span>
-<span class="cstat-no" title="statement not covered" >        console.log('Supabase create transfer error:', error.message);</span>
-        // Return a mock successful response for demo
-        const mockTransfer: FundTransfer = <span class="cstat-no" title="statement not covered" >{</span>
-          ...transfer,
-          id: generateUUID(),
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-<span class="cstat-no" title="statement not covered" >        return {</span>
-          data: mockTransfer,
-          error: null,
-          success: true,
-        };
-      }
+<span class="cstat-no" title="statement not covered" >       if (error) {</span>
+<span class="cstat-no" title="statement not covered" >         console.log('Supabase create transfer error:', error.message);</span>
+         // Return a mock successful response for demo
+         const mockTransfer: FundTransfer = <span class="cstat-no" title="statement not covered" >{</span>
+           ...transfer,
+           id: generateUUID(),
+           created_at: new Date().toISOString(),
+           updated_at: new Date().toISOString(),
+         };
+<span class="cstat-no" title="statement not covered" >         return {</span>
+           data: mockTransfer,
+           error: null,
+           success: true,
+         };
+       }
 &nbsp;
-<span class="cstat-no" title="statement not covered" >      return {</span>
-        data,
-        error: null,
-        success: true,
-      };
-    } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error('Error creating fund transfer:', error);</span>
-      // Return a mock successful response for demo
-      const mockTransfer: FundTransfer = <span class="cstat-no" title="statement not covered" >{</span>
-        ...transfer,
-        id: generateUUID(),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-<span class="cstat-no" title="statement not covered" >      return {</span>
-        data: mockTransfer,
-        error: null,
-        success: true,
-      };
-    }
-  }
+<span class="cstat-no" title="statement not covered" >       return {</span>
+         data,
+         error: null,
+         success: true,
+       };
+     } catch (error) {
+<span class="cstat-no" title="statement not covered" >       console.error('Error creating fund transfer:', error);</span>
+       // Return a mock successful response for demo
+       const mockTransfer: FundTransfer = <span class="cstat-no" title="statement not covered" >{</span>
+         ...transfer,
+         id: generateUUID(),
+         created_at: new Date().toISOString(),
+         updated_at: new Date().toISOString(),
+       };
+<span class="cstat-no" title="statement not covered" >       return {</span>
+         data: mockTransfer,
+         error: null,
+         success: true,
+       };
+     }
+   }
 &nbsp;
   // Update fund transfer
 <span class="fstat-no" title="function not covered" >  as</span>ync updateFundTransfer(id: string, updates: Partial&lt;FundTransfer&gt;): Promise&lt;ApiResponse&lt;FundTransfer&gt;&gt; {
@@ -875,28 +879,30 @@ class FundTransferService {
     }
   }
 &nbsp;
-  // Helper method to update account balances
-<span class="fstat-no" title="function not covered" >  pr</span>ivate async updateAccountBalances(fromAccount: string, toAccount: string, amount: number): Promise&lt;void&gt; {
-<span class="cstat-no" title="statement not covered" >    try {</span>
-      // Get all accounts to find the correct IDs
-      const accountsResponse = <span class="cstat-no" title="statement not covered" >await internalAccountService.getInternalAccounts();</span>
-<span class="cstat-no" title="statement not covered" >      if (!accountsResponse.data) <span class="cstat-no" title="statement not covered" >return;</span></span>
+   // Helper method to update account balances with proper currency conversion
+<span class="fstat-no" title="function not covered" >   pr</span>ivate async updateAccountBalances(transfer: Omit&lt;FundTransfer, 'id' | 'created_at' | 'updated_at'&gt;): Promise&lt;void&gt; {
+<span class="cstat-no" title="statement not covered" >     try {</span>
+       // Get all accounts to find the correct IDs
+       const accountsResponse = <span class="cstat-no" title="statement not covered" >await internalAccountService.getInternalAccounts();</span>
+<span class="cstat-no" title="statement not covered" >       if (!accountsResponse.data) <span class="cstat-no" title="statement not covered" >return;</span></span>
 &nbsp;
-      const fromAccountData = <span class="cstat-no" title="statement not covered" >accountsResponse.data.find(<span class="fstat-no" title="function not covered" >ac</span>c =&gt; <span class="cstat-no" title="statement not covered" >acc.account_name === fromAccount)</span>;</span>
-      const toAccountData = <span class="cstat-no" title="statement not covered" >accountsResponse.data.find(<span class="fstat-no" title="function not covered" >ac</span>c =&gt; <span class="cstat-no" title="statement not covered" >acc.account_name === toAccount)</span>;</span>
+       const fromAccountData = <span class="cstat-no" title="statement not covered" >accountsResponse.data.find(<span class="fstat-no" title="function not covered" >ac</span>c =&gt; <span class="cstat-no" title="statement not covered" >acc.account_name === transfer.from_account)</span>;</span>
+       const toAccountData = <span class="cstat-no" title="statement not covered" >accountsResponse.data.find(<span class="fstat-no" title="function not covered" >ac</span>c =&gt; <span class="cstat-no" title="statement not covered" >acc.account_name === transfer.to_account)</span>;</span>
 &nbsp;
-<span class="cstat-no" title="statement not covered" >      if (fromAccountData) {</span>
-<span class="cstat-no" title="statement not covered" >        await internalAccountService.updateAccountBalance(fromAccountData.id, amount, 'subtract');</span>
-      }
+       // Subtract the source amount from the source account
+<span class="cstat-no" title="statement not covered" >       if (fromAccountData) {</span>
+<span class="cstat-no" title="statement not covered" >         await internalAccountService.updateAccountBalance(fromAccountData.id, transfer.amount, 'subtract');</span>
+       }
 &nbsp;
-<span class="cstat-no" title="statement not covered" >      if (toAccountData) {</span>
-<span class="cstat-no" title="statement not covered" >        await internalAccountService.updateAccountBalance(toAccountData.id, amount, 'add');</span>
-      }
-    } catch (error) {
-<span class="cstat-no" title="statement not covered" >      console.error('Error updating account balances:', error);</span>
-      // Continue with transfer even if balance update fails
-    }
-  }
+       // Add the converted amount to the destination account
+<span class="cstat-no" title="statement not covered" >       if (toAccountData) {</span>
+<span class="cstat-no" title="statement not covered" >         await internalAccountService.updateAccountBalance(toAccountData.id, transfer.converted_amount, 'add');</span>
+       }
+     } catch (error) {
+<span class="cstat-no" title="statement not covered" >       console.error('Error updating account balances:', error);</span>
+       // Continue with transfer even if balance update fails
+     }
+   }
 }
 &nbsp;
 export const fundTransferService = <span class="cstat-no" title="statement not covered" >new FundTransferService();</span>
@@ -907,7 +913,7 @@ export const fundTransferService = <span class="cstat-no" title="statement not c
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-06-10T15:31:46.742Z
+                at 2026-06-27T13:59:56.003Z
             </div>
         <script src="../prettify.js"></script>
         <script>

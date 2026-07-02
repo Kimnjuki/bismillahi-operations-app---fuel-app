@@ -78,6 +78,7 @@ export const ValidatedInput: React.FC<ValidatedInputProps> = ({
 
       {/* Input Container */}
       <View
+        testID="input-container"
         style={[
           styles.inputContainer,
           isFocused && styles.inputContainerFocused,
@@ -87,6 +88,7 @@ export const ValidatedInput: React.FC<ValidatedInputProps> = ({
         {/* Left Icon */}
         {leftIcon && (
           <MaterialIcons
+            testID="left-icon"
             name={leftIcon}
             size={20}
             color={hasError ? '#FF6B6B' : isFocused ? '#667eea' : '#999'}
@@ -112,6 +114,7 @@ export const ValidatedInput: React.FC<ValidatedInputProps> = ({
         {/* Right Icon */}
         {showPasswordToggle ? (
           <TouchableOpacity
+            testID="password-toggle"
             onPress={togglePasswordVisibility}
             style={styles.rightIconContainer}
             activeOpacity={0.7}
@@ -124,6 +127,7 @@ export const ValidatedInput: React.FC<ValidatedInputProps> = ({
           </TouchableOpacity>
         ) : rightIcon ? (
           <TouchableOpacity
+            testID="right-icon"
             onPress={onRightIconPress}
             style={styles.rightIconContainer}
             activeOpacity={0.7}

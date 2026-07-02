@@ -1,193 +1,410 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   StyleSheet,
   Text,
   TouchableOpacity,
   Dimensions,
-  ScrollView,
-  Image,
+  Animated,
+  StatusBar,
+  FlatList,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
+
+const COLORS = {
+  background: '#131313',
+  surface: '#1E1E1E',
+  surfaceContainer: '#201f1f',
+  surfaceContainerHigh: '#2a2a2a',
+  surfaceContainerLow: '#1c1b1b',
+  surfaceVariant: '#353534',
+  primary: '#ffd79b',
+  primaryContainer: '#ffb300',
+  onPrimary: '#432c00',
+  onPrimaryContainer: '#6b4900',
+  onBackground: '#e5e2e1',
+  onSurface: '#e5e2e1',
+  onSurfaceVariant: '#d6c4ac',
+  outline: '#9e8e78',
+  outlineVariant: '#514532',
+  secondary: '#d7ffc5',
+  secondaryContainer: '#2ff801',
+  error: '#ffb4ab',
+};
+
+interface OnboardingPage {
+  id: string;
+  title: string;
+  subtitle: string;
+  description: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  badge?: string;
+  features: { label: string; icon: keyof typeof Ionicons.glyphMap }[];
+}
+
+const onboardingPages: OnboardingPage[] = [
+  {
+    id: 'precision-pumping',
+    title: 'Precision',
+    subtitle: 'Pumping',
+    description: 'Log opening and closing pump meter readings straight from the forecourt. Eliminate manual paper ledgers.',
+    icon: 'speedometer-outline',
+    badge: 'REAL-TIME',
+    features: [
+      { label: 'Log History', icon: 'time-outline' },
+      { label: 'Instant Sync', icon: 'cloud-upload-outline' },
+    ],
+  },
+  {
+    id: 'network-control',
+    title: 'Network',
+    subtitle: 'Control',
+    description: 'Switch between 5+ fuel stations instantly in one central dashboard. Manage your entire retail footprint from anywhere.',
+    icon: 'git-network-outline',
+    badge: 'CENTRALIZED',
+    features: [
+      { label: 'Multi-Station', icon: 'business-outline' },
+      { label: 'Central Control', icon: 'easel-outline' },
+    ],
+  },
+  {
+    id: 'leakproof-inventory',
+    title: 'Leakproof',
+    subtitle: 'Inventory',
+    description: 'Reconcile fuel deliveries with live physical tank dipping. Detect stock variances before they hurt your margins.',
+    icon: 'water-outline',
+    badge: 'LIVE SYNC',
+    features: [
+      { label: 'Live Sync', icon: 'checkmark-circle-outline' },
+      { label: 'Variance Alerts', icon: 'warning-outline' },
+    ],
+  },
+  {
+    id: 'smart-financials',
+    title: 'Smart',
+    subtitle: 'Financials',
+    description: 'Track localized shift expenses and sales across USD, CDF, and KES seamlessly with real-time conversion.',
+    icon: 'cash-outline',
+    badge: 'MULTI-CURRENCY',
+    features: [
+      { label: 'Multi-Currency', icon: 'globe-outline' },
+      { label: 'Real-Time FX', icon: 'trending-up-outline' },
+    ],
+  },
+];
 
 export default function WelcomeOnboardingScreen() {
   const navigation = useNavigation();
-  const [currentPage, setCurrentPage] = useState(0);
+  const flatListRef = useRef<FlatList>(null);
+   const [currentIndex, setCurrentIndex] = useState(0);
+   const scrollX = useRef(new Animated.Value(0)).current;
 
-  const onboardingPages = [
-    {
-      title: 'Welcome to',
-      subtitle: 'BISMILLAHI OPERATIONS',
-      description: 'Your comprehensive petroleum station management solution',
-      icon: '🏭',
-      features: [
-        'Real-time sales tracking',
-        'Inventory management',
-        'Financial reporting',
-        'Multi-user access control'
-      ],
-      color: ['#667eea', '#764ba2']
-    },
-    {
-      title: 'Sales',
-      subtitle: 'Management',
-      description: 'Efficiently record and track all fuel sales transactions',
-      icon: '⛽',
-      features: [
-        'Pump sales recording',
-        'Drum sales tracking',
-        'Payment method support',
-        'Receipt generation'
-      ],
-      color: ['#FF6B6B', '#FF8E8E']
-    },
-    {
-      title: 'Inventory',
-      subtitle: 'Control',
-      description: 'Monitor stock levels and manage fuel inventory',
-      icon: '📦',
-      features: [
-        'Stock level monitoring',
-        'Low stock alerts',
-        'Variance tracking',
-        'Automatic reorder points'
-      ],
-      color: ['#4ECDC4', '#44A08D']
-    },
-    {
-      title: 'Financial',
-      subtitle: 'Reporting',
-      description: 'Comprehensive financial insights and reporting',
-      icon: '📊',
-      features: [
-        'Daily sales reports',
-        'Expense tracking',
-        'Profit analysis',
-        'Export capabilities'
-      ],
-      color: ['#42A5F5', '#64B5F6']
+  const iconScale = useRef(new Animated.Value(1)).current;
+  const iconOpacity = useRef(new Animated.Value(1)).current;
+
+  // Animate icon on page change
+  useEffect(() => {
+    iconScale.setValue(0.8);
+    iconOpacity.setValue(0);
+    Animated.parallel([
+      Animated.spring(iconScale, {
+        toValue: 1,
+        friction: 4,
+        tension: 60,
+        useNativeDriver: true,
+      }),
+      Animated.timing(iconOpacity, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [currentIndex]);
+
+  const completeOnboarding = useCallback(async () => {
+    try {
+      await AsyncStorage.setItem('@onboarding_completed', 'true');
+    } catch (e) {
+      console.warn('Failed to save onboarding state:', e);
     }
-  ];
+    (navigation as any).navigate('Auth');
+  }, [navigation]);
 
-  const handleNext = () => {
-    if (currentPage < onboardingPages.length - 1) {
-      setCurrentPage(currentPage + 1);
+  const handleNext = useCallback(() => {
+    if (currentIndex < onboardingPages.length - 1) {
+      flatListRef.current?.scrollToIndex({ index: currentIndex + 1, animated: true });
     } else {
-      (navigation as any).navigate('Welcome');
+      completeOnboarding();
     }
+  }, [currentIndex, completeOnboarding]);
+
+  const handleSkip = useCallback(() => {
+    completeOnboarding();
+  }, [completeOnboarding]);
+
+  const onScroll = Animated.event(
+    [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+    { useNativeDriver: false }
+  );
+
+  const onMomentumEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const index = Math.round(e.nativeEvent.contentOffset.x / width);
+    setCurrentIndex(index);
   };
 
-  const handlePrevious = () => {
-    if (currentPage > 0) {
-      setCurrentPage(currentPage - 1);
-    }
-  };
+  const renderPaginationDots = () => (
+    <View style={styles.paginationRow}>
+      {onboardingPages.map((_, index) => {
+        const dotWidth = scrollX.interpolate({
+          inputRange: [
+            width * (index - 1),
+            width * index,
+            width * (index + 1),
+          ],
+          outputRange: [8, 48, 8],
+          extrapolate: 'clamp',
+        });
+        const dotOpacity = scrollX.interpolate({
+          inputRange: [
+            width * (index - 1),
+            width * index,
+            width * (index + 1),
+          ],
+          outputRange: [0.3, 1, 0.3],
+          extrapolate: 'clamp',
+        });
+        return (
+          <Animated.View
+            key={index}
+            style={[
+              styles.paginationDot,
+              {
+                width: dotWidth,
+                opacity: dotOpacity,
+                backgroundColor:
+                  index === currentIndex
+                    ? COLORS.primaryContainer
+                    : COLORS.surfaceVariant,
+              },
+            ]}
+          />
+        );
+      })}
+    </View>
+  );
 
-  const handleSkip = () => {
-    (navigation as any).navigate('Welcome');
-  };
+  const renderItem = ({ item, index }: { item: OnboardingPage; index: number }) => {
+    const inputRange = [width * (index - 1), width * index, width * (index + 1)];
+    
+    const scale = scrollX.interpolate({
+      inputRange,
+      outputRange: [0.6, 1, 0.6],
+      extrapolate: 'clamp',
+    });
+    
+    const opacity = scrollX.interpolate({
+      inputRange,
+      outputRange: [0.3, 1, 0.3],
+      extrapolate: 'clamp',
+    });
+    
+    const translateY = scrollX.interpolate({
+      inputRange,
+      outputRange: [40, 0, 40],
+      extrapolate: 'clamp',
+    });
 
-  const renderPageIndicator = () => (
-    <View style={styles.pageIndicator}>
-      {onboardingPages.map((_, index) => (
-        <View
-          key={index}
+    const badgeScale = scrollX.interpolate({
+      inputRange,
+      outputRange: [0.5, 1, 0.5],
+      extrapolate: 'clamp',
+    });
+
+    return (
+      <View style={styles.pageContainer}>
+        <Animated.View
           style={[
-            styles.indicatorDot,
-            index === currentPage && styles.activeDot
+            styles.iconArea,
+            { transform: [{ scale }], opacity },
           ]}
-        />
-      ))}
-    </View>
-  );
+        >
+          {/* Outer ring */}
+          <View style={styles.iconOuterRing}>
+            {/* Inner ring */}
+            <View style={styles.iconInnerRing}>
+              {/* Icon glass container */}
+              <View style={styles.iconGlassContainer}>
+                <Ionicons
+                  name={item.icon}
+                  size={64}
+                  color={COLORS.primaryContainer}
+                />
+              </View>
+              {/* Floating orbit nodes */}
+              <Animated.View
+                style={[
+                  styles.orbitNodeTop,
+                  { transform: [{ scale: badgeScale }] },
+                ]}
+              >
+                <Ionicons
+                  name={index === 0 ? 'time-outline' : index === 1 ? 'business-outline' : index === 2 ? 'checkmark-circle-outline' : 'globe-outline'}
+                  size={18}
+                  color={COLORS.primaryContainer}
+                />
+              </Animated.View>
+              <Animated.View
+                style={[
+                  styles.orbitNodeBottom,
+                  { transform: [{ scale: badgeScale }] },
+                ]}
+              >
+                <Ionicons
+                  name={index === 0 ? 'cloud-upload-outline' : index === 1 ? 'easel-outline' : index === 2 ? 'warning-outline' : 'trending-up-outline'}
+                  size={18}
+                  color={COLORS.secondary}
+                />
+              </Animated.View>
+            </View>
+          </View>
+        </Animated.View>
 
-  const renderFeatureList = (features: string[]) => (
-    <View style={styles.featuresContainer}>
-      {features.map((feature, index) => (
-        <View key={index} style={styles.featureItem}>
-          <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
-          <Text style={styles.featureText}>{feature}</Text>
-        </View>
-      ))}
-    </View>
-  );
+        {/* Text Content */}
+        <Animated.View
+          style={[
+            styles.textContent,
+            { transform: [{ translateY }], opacity },
+          ]}
+        >
+          <Text style={styles.title}>{item.title}</Text>
+          <Text style={styles.subtitle}>{item.subtitle}</Text>
+          <Text style={styles.description}>{item.description}</Text>
+        </Animated.View>
 
-  const currentPageData = onboardingPages[currentPage];
+        {/* Feature Cards */}
+        <Animated.View
+          style={[
+            styles.featureCard,
+            { transform: [{ translateY }], opacity },
+          ]}
+        >
+          <View style={styles.featureCardRow}>
+            {item.features.map((feature, idx) => (
+              <View key={idx} style={styles.featureItem}>
+                <Ionicons
+                  name={feature.icon}
+                  size={20}
+                  color={COLORS.primaryContainer}
+                />
+                <Text style={styles.featureLabel}>{feature.label}</Text>
+              </View>
+            ))}
+          </View>
+        </Animated.View>
+      </View>
+    );
+  };
 
   return (
-    <LinearGradient colors={currentPageData.color as any} style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        {/* Header */}
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
+      <View style={styles.safeArea}>
+        {/* Header - Skip Button (animated opacity) */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={handleSkip} style={styles.skipButton}>
-            <Text style={styles.skipText}>Skip</Text>
-          </TouchableOpacity>
+          <Animated.View
+            style={{
+              opacity: scrollX.interpolate({
+                inputRange: [
+                  width * (onboardingPages.length - 2),
+                  width * (onboardingPages.length - 1),
+                ],
+                outputRange: [1, 0],
+                extrapolate: 'clamp',
+              }),
+            }}
+          >
+            <TouchableOpacity onPress={handleSkip} style={styles.skipButton}>
+              <Text style={styles.skipText}>Skip</Text>
+            </TouchableOpacity>
+          </Animated.View>
         </View>
 
-        {/* Content */}
-        <ScrollView 
-          style={styles.content}
-          contentContainerStyle={styles.contentContainer}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Icon */}
-          <View style={styles.iconContainer}>
-            <Text style={styles.iconText}>{currentPageData.icon}</Text>
-          </View>
-
-          {/* Title */}
-          <View style={styles.titleContainer}>
-            <Text style={styles.title}>{currentPageData.title}</Text>
-            <Text style={styles.subtitle}>{currentPageData.subtitle}</Text>
-          </View>
-
-          {/* Description */}
-          <Text style={styles.description}>{currentPageData.description}</Text>
-
-          {/* Features */}
-          {renderFeatureList(currentPageData.features)}
-
-          {/* Page Indicator */}
-          {renderPageIndicator()}
-        </ScrollView>
+        {/* FlatList for horizontal scroll */}
+        <FlatList
+          ref={flatListRef}
+          data={onboardingPages}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.id}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          onScroll={onScroll}
+          onMomentumScrollEnd={onMomentumEnd}
+          scrollEventThrottle={16}
+          bounces={false}
+          style={styles.flatList}
+        />
 
         {/* Footer */}
         <View style={styles.footer}>
-          <View style={styles.buttonContainer}>
-            {currentPage > 0 && (
-              <TouchableOpacity 
+          {/* Ambient glow */}
+          <View style={styles.footerGlow} />
+          
+          {/* Pagination */}
+          {renderPaginationDots()}
+
+          {/* Buttons */}
+          <View style={styles.buttonRow}>
+            {currentIndex > 0 && (
+              <TouchableOpacity
                 style={styles.previousButton}
-                onPress={handlePrevious}
+                onPress={() =>
+                  flatListRef.current?.scrollToIndex({
+                    index: currentIndex - 1,
+                    animated: true,
+                  })
+                }
               >
-                <Ionicons name="chevron-back" size={24} color="#ffffff" />
-                <Text style={styles.previousButtonText}>Previous</Text>
+                <Ionicons
+                  name="chevron-back"
+                  size={20}
+                  color={COLORS.onSurfaceVariant}
+                />
               </TouchableOpacity>
             )}
-            
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.nextButton}
               onPress={handleNext}
+              activeOpacity={0.9}
             >
               <Text style={styles.nextButtonText}>
-                {currentPage === onboardingPages.length - 1 ? 'Get Started' : 'Next'}
+                {currentIndex === onboardingPages.length - 1
+                  ? 'Get Started'
+                  : 'Next'}
               </Text>
-              <Ionicons name="chevron-forward" size={24} color="#ffffff" />
+              <Ionicons
+                name="arrow-forward"
+                size={20}
+                color={COLORS.onPrimaryContainer}
+              />
             </TouchableOpacity>
           </View>
         </View>
-      </SafeAreaView>
-    </LinearGradient>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: COLORS.background,
   },
   safeArea: {
     flex: 1,
@@ -195,133 +412,221 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
+    alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 10,
+    height: 64,
+    zIndex: 10,
   },
   skipButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
   skipText: {
-    color: '#ffffff',
-    fontSize: 16,
+    color: COLORS.onSurfaceVariant,
+    fontSize: 14,
     fontWeight: '600',
+    letterSpacing: 0.7,
   },
-  content: {
+  flatList: {
     flex: 1,
   },
-  contentContainer: {
-    flexGrow: 1,
+  pageContainer: {
+    width,
+    alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 30,
+    paddingHorizontal: 20,
   },
-  iconContainer: {
+  iconArea: {
+    width: 192,
+    height: 192,
     alignItems: 'center',
-    marginBottom: 30,
+    justifyContent: 'center',
+    marginBottom: 24,
   },
-  iconText: {
-    fontSize: 80,
-  },
-  titleContainer: {
+  iconOuterRing: {
+    width: 192,
+    height: 192,
+    borderRadius: 96,
+    borderWidth: 1,
+    borderColor: COLORS.outlineVariant,
     alignItems: 'center',
-    marginBottom: 20,
+    justifyContent: 'center',
+  },
+  iconInnerRing: {
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    borderWidth: 1,
+    borderColor: COLORS.outlineVariant,
+    opacity: 0.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  iconGlassContainer: {
+    width: 128,
+    height: 128,
+    borderRadius: 24,
+    backgroundColor: 'rgba(30, 30, 30, 0.6)',
+    borderWidth: 1,
+    borderColor: COLORS.surfaceContainerHigh,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: COLORS.primaryContainer,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 40,
+    elevation: 10,
+  },
+  orbitNodeTop: {
+    position: 'absolute',
+    top: -10,
+    right: -8,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: COLORS.surfaceContainerHigh,
+    borderWidth: 1,
+    borderColor: COLORS.outlineVariant,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  orbitNodeBottom: {
+    position: 'absolute',
+    bottom: -12,
+    left: -16,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: COLORS.surfaceContainerHigh,
+    borderWidth: 1,
+    borderColor: COLORS.outlineVariant,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  textContent: {
+    alignItems: 'center',
+    marginBottom: 16,
   },
   title: {
     fontSize: 28,
-    fontWeight: '300',
-    color: '#ffffff',
+    fontWeight: '700',
+    color: COLORS.onBackground,
+    letterSpacing: -0.56,
     textAlign: 'center',
-    marginBottom: 5,
+    lineHeight: 34,
   },
   subtitle: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#ffffff',
+    fontSize: 28,
+    fontWeight: '700',
+    color: COLORS.onBackground,
+    letterSpacing: -0.56,
     textAlign: 'center',
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
+    lineHeight: 34,
+    marginBottom: 8,
   },
   description: {
-    fontSize: 18,
-    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: 16,
+    fontWeight: '400',
+    color: COLORS.onSurfaceVariant,
     textAlign: 'center',
     lineHeight: 24,
-    marginBottom: 30,
+    maxWidth: 280,
   },
-  featuresContainer: {
-    marginBottom: 40,
+  featureCard: {
+    backgroundColor: 'rgba(30, 30, 30, 0.6)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.surfaceContainerHigh,
+    padding: 16,
+    width: '100%',
+    maxWidth: 320,
+    marginBottom: 16,
+  },
+  featureCardRow: {
+    flexDirection: 'row',
+    gap: 8,
   },
   featureItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    paddingHorizontal: 10,
-  },
-  featureText: {
-    fontSize: 16,
-    color: '#ffffff',
-    marginLeft: 12,
     flex: 1,
-  },
-  pageIndicator: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+    height: 64,
+    backgroundColor: COLORS.surfaceContainer,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.outlineVariant,
     alignItems: 'center',
-    marginBottom: 20,
+    justifyContent: 'center',
+    gap: 4,
   },
-  indicatorDot: {
-    width: 8,
+  featureLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: COLORS.onSurfaceVariant,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  paginationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
     height: 8,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    marginHorizontal: 4,
+    marginBottom: 16,
   },
-  activeDot: {
-    backgroundColor: '#ffffff',
-    width: 24,
+  paginationDot: {
     height: 8,
     borderRadius: 4,
   },
   footer: {
-    paddingHorizontal: 30,
-    paddingBottom: 30,
+    paddingHorizontal: 20,
+    paddingBottom: 24,
+    position: 'relative',
   },
-  buttonContainer: {
+  footerGlow: {
+    position: 'absolute',
+    bottom: -96,
+    left: -96,
+    width: 256,
+    height: 256,
+    backgroundColor: COLORS.primaryContainer,
+    opacity: 0.05,
+    borderRadius: 128,
+    pointerEvents: 'none',
+    zIndex: -1,
+  },
+  buttonRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 12,
   },
   previousButton: {
-    flexDirection: 'row',
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.outlineVariant,
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 25,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  previousButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 5,
+    justifyContent: 'center',
   },
   nextButton: {
+    flex: 1,
+    height: 56,
+    backgroundColor: COLORS.primaryContainer,
+    borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 30,
-    paddingVertical: 15,
-    borderRadius: 25,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
+    justifyContent: 'center',
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
   },
   nextButtonText: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginRight: 5,
+    color: COLORS.onPrimaryContainer,
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 0.7,
   },
 });

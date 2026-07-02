@@ -16,7 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { stationService } from '../services/stationService';
+import { stationService, SAMPLE_STATIONS } from '../services/stationService';
 import { pumpService } from '../services/pumpService';
 import { pumpReadingService } from '../services/pumpReadingService';
 import { tankService } from '../services/tankService';
@@ -72,6 +72,9 @@ export default function PumpAndDippingManagementScreen() {
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<'readings' | 'dipping' | 'validation'>('readings');
   const [readingDate, setReadingDate] = useState(new Date().toISOString().split('T')[0]);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState<number>(new Date().getMonth() + 1);
+  const [calendarYear, setCalendarYear] = useState<number>(new Date().getFullYear());
 
   // Derived: is this a drum station? (DEPOT ISSIRO)
   const isDrumStation = selectedStation?.system_type === 'drum' || selectedStation?.name?.toLowerCase().includes('issiro');
@@ -180,7 +183,7 @@ export default function PumpAndDippingManagementScreen() {
   const loadStations = useCallback(async () => {
     try {
       const response = await stationService.getStations();
-      if (response.success && response.data) {
+      if (response.success && response.data && response.data.length > 0) {
         setStations(response.data);
         if (response.data.length > 0) {
           const targetStation = routeParams?.stationId 
@@ -192,9 +195,25 @@ export default function PumpAndDippingManagementScreen() {
             setSelectedStation(response.data[0]);
           }
         }
+      } else {
+        setStations(SAMPLE_STATIONS);
+        if (SAMPLE_STATIONS.length > 0) {
+          const targetStation = routeParams?.stationId 
+            ? SAMPLE_STATIONS.find(s => s.id === routeParams.stationId) 
+            : SAMPLE_STATIONS[0];
+          if (targetStation) {
+            setSelectedStation(targetStation);
+          } else {
+            setSelectedStation(SAMPLE_STATIONS[0]);
+          }
+        }
       }
     } catch (error) {
       console.error('Error loading stations:', error);
+      setStations(SAMPLE_STATIONS);
+      if (SAMPLE_STATIONS.length > 0) {
+        setSelectedStation(SAMPLE_STATIONS[0]);
+      }
     }
   }, [routeParams?.stationId]);
 
@@ -500,7 +519,7 @@ export default function PumpAndDippingManagementScreen() {
           recorded_by: appUser.id,
         }));
 
-        const pumpResult = await pumpReadingService.saveStationPumpReadings(pumpReadingData);
+        const pumpResult = await pumpReadingService.saveStationPumpReadings(pumpReadingData, readingDate);
         if (!pumpResult.success) {
           throw new Error(pumpResult.error || 'Failed to save pump readings');
         }
@@ -513,7 +532,8 @@ export default function PumpAndDippingManagementScreen() {
             tankId: d.tankId, 
             dippingReading: parseFloat(d.currentDip) || 0 
           })),
-          appUser.id
+          appUser.id,
+          readingDate
         );
 
         if (!tankResult.success) {
@@ -571,15 +591,59 @@ export default function PumpAndDippingManagementScreen() {
     <View style={styles.dateRow}>
       <View style={styles.dateField}>
         <Text style={styles.fieldLabel}>Reading Date</Text>
-        <TextInput
-          style={styles.readingInput}
-          value={readingDate}
-          onChangeText={setReadingDate}
-          placeholder="YYYY-MM-DD"
-          placeholderTextColor="rgba(255,255,255,0.3)"
-        />
+        <TouchableOpacity style={styles.readingInput} onPress={() => { const d = new Date(`${readingDate}T00:00:00`); setCalendarMonth(d.getMonth() + 1); setCalendarYear(d.getFullYear()); setShowCalendar(true); }}>
+          <Text style={{ color: '#fff' }}>{readingDate}</Text>
+          <Ionicons name="calendar" size={18} color="#F0C38E" />
+        </TouchableOpacity>
       </View>
     </View>
+  );
+
+  // ===== RENDER: Calendar Modal =====
+  const renderCalendarModal = () => (
+    <Modal visible={showCalendar} transparent animationType="fade" onRequestClose={() => setShowCalendar(false)}>
+      <TouchableOpacity activeOpacity={1} onPress={() => setShowCalendar(false)}>
+        <View style={styles.calendarOverlay}>
+          <TouchableOpacity activeOpacity={1}>
+            <View style={styles.calendarCard}>
+              <View style={styles.calendarHeader}>
+                <TouchableOpacity onPress={() => setCalendarMonth(m => m === 1 ? 12 : m - 1)} style={styles.calendarNavBtn}>
+                  <Ionicons name="chevron-back" size={24} color="#F0C38E" />
+                </TouchableOpacity>
+                <Text style={styles.calendarTitle}>{calendarMonth} / {calendarYear}</Text>
+                <TouchableOpacity onPress={() => setCalendarMonth(m => m === 12 ? 1 : m + 1)} style={styles.calendarNavBtn}>
+                  <Ionicons name="chevron-forward" size={24} color="#F0C38E" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.calendarWeekRow}>
+                {['S','M','T','W','T','F','S'].map((d, i) => (
+                  <Text key={i} style={styles.calendarWeekText}>{d}</Text>
+                ))}
+              </View>
+              <View style={styles.calendarGrid}>
+                {(() => {
+                  const firstDay = new Date(calendarYear, calendarMonth - 1, 1).getDay();
+                  const days = new Date(calendarYear, calendarMonth, 0).getDate();
+                  const today = new Date();
+                  const cells = [];
+                  for (let i = 0; i < firstDay; i++) cells.push(<View key={'e' + i} style={styles.calendarCellEmpty} />);
+                      for (let d = 1; d <= days; d++) {
+                          const selected = new Date(`${readingDate}T00:00:00`).getFullYear() === calendarYear && new Date(`${readingDate}T00:00:00`).getMonth() + 1 === calendarMonth && new Date(`${readingDate}T00:00:00`).getDate() === d;
+                    const isToday = today.getFullYear() === calendarYear && today.getMonth() + 1 === calendarMonth && today.getDate() === d;
+                    cells.push(
+                      <TouchableOpacity key={'d' + d} style={[styles.calendarCell, selected && styles.calendarCellSelected, isToday && styles.calendarCellToday]} onPress={() => { setReadingDate(`${calendarYear}-${String(calendarMonth).padStart(2, '0')}-${String(d).padStart(2, '0')}`); setShowCalendar(false); }}>
+                        <Text style={[styles.calendarCellText, selected && styles.calendarCellTextSelected, isToday && styles.calendarCellTextToday]}>{d}</Text>
+                      </TouchableOpacity>
+                    );
+                  }
+                  return cells;
+                })()}
+              </View>
+            </View>
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    </Modal>
   );
 
   // ===== RENDER: Drum Station Dip Reading (DEPOT ISSIRO) =====
@@ -1250,6 +1314,8 @@ export default function PumpAndDippingManagementScreen() {
             </View>
           </View>
         </Modal>
+        {/* Calendar Modal */}
+        {renderCalendarModal()}
       </SafeAreaView>
     </LinearGradient>
   );
@@ -1760,5 +1826,80 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#ffffff',
     fontWeight: '500',
+  },
+  calendarOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  calendarCard: {
+    backgroundColor: '#48426D',
+    borderRadius: 15,
+    padding: 20,
+    width: '90%',
+    maxWidth: 340,
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  calendarNavBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calendarTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#F0C38E',
+  },
+  calendarWeekRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  calendarWeekText: {
+    width: 32,
+    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.5)',
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  calendarCellEmpty: {
+    width: 32,
+    height: 32,
+  },
+  calendarCell: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 16,
+  },
+  calendarCellSelected: {
+    backgroundColor: '#F0C38E',
+  },
+  calendarCellToday: {
+    borderWidth: 1,
+    borderColor: '#F0C38E',
+  },
+  calendarCellText: {
+    fontSize: 13,
+    color: '#ffffff',
+  },
+  calendarCellTextSelected: {
+    color: '#312C51',
+    fontWeight: '700',
+  },
+  calendarCellTextToday: {
+    color: '#ffffff',
   },
 });

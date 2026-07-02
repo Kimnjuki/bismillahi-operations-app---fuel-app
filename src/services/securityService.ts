@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../config/supabase';
 import { User } from '../types';
 import { generateSecurityId } from '../utils/uuid';
+import * as Crypto from 'expo-crypto';
 
 // Security configuration
 interface SecurityConfig {
@@ -58,6 +59,7 @@ class SecurityService {
   private config: SecurityConfig = DEFAULT_SECURITY_CONFIG;
   private loginAttempts: Map<string, LoginAttempt> = new Map();
   private activeSessions: Map<string, number> = new Map();
+  private rateLimitMap: Map<string, { count: number; resetTime: number }> = new Map();
 
   constructor() {
     this.loadSecurityConfig();
@@ -283,11 +285,21 @@ class SecurityService {
   // Send security event to server
   private async sendSecurityEventToServer(event: SecurityEvent): Promise<void> {
     try {
+      if (!supabase) {
+        console.warn('Supabase client is not initialized. Skipping security event upload.');
+        return;
+      }
+
+      const userId = event.userId || event.metadata?.userId;
+      if (!userId) {
+        return;
+      }
+
       const { error } = await supabase
         .from('security_events')
         .insert([{
           id: event.id,
-          user_id: event.userId,
+          user_id: userId,
           event_type: event.eventType,
           description: event.description,
           ip_address: event.ipAddress,
@@ -355,6 +367,8 @@ class SecurityService {
 
       case 'html':
         return input
+          .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+          .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
           .replace(/<[^>]*>/g, '')
           .replace(/[<>]/g, '')
           .trim();
@@ -380,25 +394,21 @@ class SecurityService {
     }
   }
 
-  // Generate secure random string
-  generateSecureToken(length: number = 32): string {
+  async generateSecureToken(length: number = 32): Promise<string> {
+    const bytes = await Crypto.getRandomBytes(length);
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     let result = '';
     for (let i = 0; i < length; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
+      result += chars[bytes[i] % chars.length];
     }
     return result;
   }
 
-  // Hash sensitive data (simple hash for demo - use proper crypto in production)
-  hashSensitiveData(data: string): string {
-    let hash = 0;
-    for (let i = 0; i < data.length; i++) {
-      const char = data.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash; // Convert to 32-bit integer
-    }
-    return Math.abs(hash).toString(16);
+  async hashSensitiveData(data: string): Promise<string> {
+    return await Crypto.digestStringAsync(
+      Crypto.CryptoDigestAlgorithm.SHA256,
+      data
+    );
   }
 
   // Check for suspicious activity
@@ -592,33 +602,136 @@ class SecurityService {
 
   async encryptData(data: string): Promise<string> {
     try {
-      // Simple base64 encoding (in production, use proper encryption)
-      return btoa(data);
+      if (typeof crypto === 'undefined' || !crypto.subtle) {
+        throw new Error('Web Crypto API not available');
+      }
+
+      const salt = toArrayBuffer(await Crypto.getRandomBytes(16));
+      const iv = toArrayBuffer(await Crypto.getRandomBytes(12));
+
+      const keyMaterial = await crypto.subtle.importKey(
+        'raw',
+        new TextEncoder().encode('fuelr-app-encryption-key-v1'),
+        'PBKDF2',
+        false,
+        ['deriveKey']
+      );
+
+      const key = await crypto.subtle.deriveKey(
+        {
+          name: 'PBKDF2',
+          salt,
+          iterations: 100000,
+          hash: 'SHA-256',
+        },
+        keyMaterial,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['encrypt', 'decrypt']
+      );
+
+      const plaintext = new TextEncoder().encode(data);
+      const encrypted = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        toArrayBuffer(plaintext)
+      );
+
+      const combined = new Uint8Array(salt.byteLength + iv.byteLength + encrypted.byteLength);
+      combined.set(new Uint8Array(salt));
+      combined.set(new Uint8Array(iv), salt.byteLength);
+      combined.set(new Uint8Array(encrypted), salt.byteLength + iv.byteLength);
+
+      return btoa(String.fromCharCode(...combined));
     } catch (error) {
       console.error('Error encrypting data:', error);
-      return data;
+      throw new Error('Encryption failed');
     }
   }
 
   async decryptData(encryptedData: string): Promise<string> {
     try {
-      // Simple base64 decoding (in production, use proper decryption)
-      return atob(encryptedData);
+      if (typeof crypto === 'undefined' || !crypto.subtle) {
+        throw new Error('Web Crypto API not available');
+      }
+
+      const combined = Uint8Array.from(atob(encryptedData), c => c.charCodeAt(0));
+      const salt = toArrayBuffer(combined.slice(0, 16));
+      const iv = toArrayBuffer(combined.slice(16, 28));
+      const ciphertext = toArrayBuffer(combined.slice(28));
+
+      const keyMaterial = await crypto.subtle.importKey(
+        'raw',
+        new TextEncoder().encode('fuelr-app-encryption-key-v1'),
+        'PBKDF2',
+        false,
+        ['deriveKey']
+      );
+
+      const key = await crypto.subtle.deriveKey(
+        {
+          name: 'PBKDF2',
+          salt,
+          iterations: 100000,
+          hash: 'SHA-256',
+        },
+        keyMaterial,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['encrypt', 'decrypt']
+      );
+
+      const decrypted = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        ciphertext
+      );
+
+      return new TextDecoder().decode(decrypted);
     } catch (error) {
       console.error('Error decrypting data:', error);
-      return encryptedData;
+      throw new Error('Decryption failed');
     }
   }
 
   async checkRateLimit(userId: string, endpoint: string): Promise<boolean> {
     try {
-      // Simple rate limiting (implement proper rate limiting as needed)
+      const key = `${userId}:${endpoint}`;
+      const now = Date.now();
+      const windowMs = 60000; // 1 minute
+      const maxRequests = 100; // Max requests per minute
+
+      const current = this.rateLimitMap.get(key);
+
+      if (!current || now > current.resetTime) {
+        this.rateLimitMap.set(key, {
+          count: 1,
+          resetTime: now + windowMs,
+        });
+        return true;
+      }
+
+      if (current.count >= maxRequests) {
+        await this.logSecurityEvent({
+          eventType: 'SECURITY_VIOLATION',
+          description: 'Rate limit exceeded',
+          severity: 'MEDIUM',
+          metadata: { userId, endpoint, count: current.count },
+        });
+        return false;
+      }
+
+      current.count++;
       return true;
     } catch (error) {
       console.error('Error checking rate limit:', error);
       return false;
     }
   }
+}
+
+function toArrayBuffer(view: Uint8Array): ArrayBuffer {
+  return view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength) as ArrayBuffer;
 }
 
 // Export singleton instance

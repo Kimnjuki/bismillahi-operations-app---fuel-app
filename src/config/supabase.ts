@@ -1,30 +1,116 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import Constants from 'expo-constants';
 
-// Environment variables - For Expo Go compatibility, values are hardcoded
-// since process.env is not available in the Expo Go client
-const supabaseUrl = 'https://bdjoknphffficrepbxim.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJkam9rbnBoZmZmaWNyZXBieGltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzE1MTk2ODAsImV4cCI6MjA0NzA5NTY4MH0.9K7Q3aQUTpITX64S3yrNw_q4DnyqBf';
+// Environment variables - loaded from .env or app config
+const getSupabaseUrl = (): string => {
+  return (
+    process.env.EXPO_PUBLIC_SUPABASE_URL ||
+    Constants.expoConfig?.extra?.supabaseUrl ||
+    ''
+  );
+};
 
+const getSupabaseAnonKey = (): string => {
+  return (
+    process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ||
+    Constants.expoConfig?.extra?.supabaseAnonKey ||
+    ''
+  );
+};
+
+const supabaseUrl = getSupabaseUrl();
+const supabaseAnonKey = getSupabaseAnonKey();
+
+let warned = false;
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase configuration. Please check your setup.');
+  if (!warned) {
+    console.warn('Missing Supabase configuration. Please set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY in your .env file or app.json extras.');
+    warned = true;
+  }
 }
 
-// Create Supabase client
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false,
-    storage: undefined, // Use default AsyncStorage
-  },
-});
+const createDummySupabase = (): SupabaseClient => {
+  const noopResult = Promise.resolve({ data: null, error: null });
+  const builder = {
+    select: () => builder,
+    insert: () => builder,
+    update: () => builder,
+    delete: () => builder,
+    upsert: () => builder,
+    eq: () => builder,
+    neq: () => builder,
+    gt: () => builder,
+    gte: () => builder,
+    lt: () => builder,
+    lte: () => builder,
+    like: () => builder,
+    ilike: () => builder,
+    is: () => builder,
+    in: () => builder,
+    contains: () => builder,
+    containedBy: () => builder,
+    overlaps: () => builder,
+    match: () => builder,
+    textSearch: () => builder,
+    or: () => builder,
+    not: () => builder,
+    order: () => builder,
+    limit: () => builder,
+    range: () => builder,
+    single: () => noopResult,
+    maybeSingle: () => noopResult,
+    then(resolve: (value: { data: any; error: any }) => void) {
+      return resolve({ data: null, error: null });
+    },
+  };
+  return {
+    from: () => builder,
+    auth: {
+      signInWithPassword: () => noopResult,
+      signOut: () => noopResult,
+      getUser: () => noopResult,
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } }, error: null }),
+    },
+    channel: () => ({
+      on: () => ({
+        subscribe: () => ({}),
+      }),
+    }),
+    removeChannel: () => {},
+    rpc: () => noopResult,
+  } as unknown as SupabaseClient;
+};
+
+const isConfigured = (url: string, key: string) => {
+  return (
+    url.startsWith('http://') || url.startsWith('https://')
+  ) && !url.includes('YOUR_') && key.length > 20 && !key.includes('YOUR_');
+};
+
+export const supabase = (() => {
+  try {
+    if (isConfigured(supabaseUrl, supabaseAnonKey)) {
+      return createClient(supabaseUrl, supabaseAnonKey, {
+        auth: {
+          autoRefreshToken: true,
+          persistSession: true,
+          detectSessionInUrl: false,
+          storage: undefined,
+        },
+      });
+    }
+    return createDummySupabase();
+  } catch (error) {
+    console.error('Failed to initialize Supabase client:', error);
+    return createDummySupabase();
+  }
+})();
 
 // Import types from the main types file
 import type {
   User,
   UserRole,
   PumpSale,
-  DrumSale,
   StockItem,
   StockVariance,
   Expense,
@@ -33,10 +119,12 @@ import type {
   Notification,
   ExpenseCategory,
   FuelType,
-  DrumType,
   PaymentMethod,
   Currency,
   NotificationType,
+  InternalAccount,
+  Station,
+  InternalAccountType,
 } from '../types';
 
 // Re-export types for external use
@@ -44,7 +132,6 @@ export type {
   User,
   UserRole,
   PumpSale,
-  DrumSale,
   StockItem,
   StockVariance,
   Expense,
@@ -53,16 +140,17 @@ export type {
   Notification,
   ExpenseCategory,
   FuelType,
-  DrumType,
   PaymentMethod,
   Currency,
   NotificationType,
+  InternalAccount,
+  Station,
+  InternalAccountType,
 };
 
 // Database response types (for Supabase queries)
 export type DatabaseUser = User;
 export type DatabasePumpSale = PumpSale;
-export type DatabaseDrumSale = DrumSale;
 export type DatabaseStockItem = StockItem;
 export type DatabaseStockVariance = StockVariance;
 export type DatabaseExpense = Expense;

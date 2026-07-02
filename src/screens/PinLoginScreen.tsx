@@ -91,7 +91,10 @@ export default function PinLoginScreen() {
       const signInResult = await signIn({ user_code: userCode, pin });
       
       if (signInResult.error) {
-        Alert.alert('Login Failed', signInResult.error.message || 'Invalid user code or PIN');
+        const errorMessage = typeof signInResult.error === 'string' 
+          ? signInResult.error 
+          : signInResult.error.message || 'Invalid user code or PIN';
+        Alert.alert('Login Failed', errorMessage);
       } else {
         // Navigation will be handled by the auth state change
         console.log('Login successful');

@@ -39,7 +39,7 @@ class HelpService {
       id: 'getting-started',
       title: 'Getting Started',
       content: `
-# Welcome to Bismillahi Operations
+# Welcome to Fuelr
 
 This petroleum operations management system helps you track sales, manage inventory, and monitor your business performance.
 
@@ -73,7 +73,7 @@ Record both pump sales and drum sales efficiently.
 
 ## Pump Sales:
 1. Select the pump number
-2. Choose fuel type (Petrol, Diesel, Kerosene)
+ 2. Choose fuel type (PMS, AGO)
 3. Enter volume in liters
 4. Set price per liter
 5. Select payment method
@@ -339,7 +339,7 @@ Common issues and their solutions.
   private onboardingSteps: OnboardingStep[] = [
     {
       id: 'welcome',
-      title: 'Welcome to Bismillahi Operations',
+      title: 'Welcome to Fuelr',
       description: 'Let\'s get you started with your petroleum operations management system.',
       screen: 'Welcome',
       required: true,

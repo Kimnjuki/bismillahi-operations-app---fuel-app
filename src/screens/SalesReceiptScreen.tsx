@@ -58,22 +58,22 @@ export default function SalesReceiptScreen() {
       time: new Date().toLocaleTimeString(),
       station: 'ISSIRO STATION',
       cashier: appUser?.full_name || 'Cashier',
-      items: [
-        {
-          id: '1',
-          product: 'Petrol (Premium)',
-          quantity: 25.5,
-          unitPrice: 1500,
-          total: 38250,
-        },
-        {
-          id: '2',
-          product: 'Diesel',
-          quantity: 15.0,
-          unitPrice: 1400,
-          total: 21000,
-        },
-      ],
+   items: [
+     {
+       id: '1',
+       product: 'PMS',
+       quantity: 25.5,
+       unitPrice: 1500,
+       total: 38250,
+     },
+     {
+       id: '2',
+       product: 'AGO',
+       quantity: 15.0,
+       unitPrice: 1400,
+       total: 21000,
+     },
+   ],
       subtotal: 59250,
       tax: 0,
       total: 59250,

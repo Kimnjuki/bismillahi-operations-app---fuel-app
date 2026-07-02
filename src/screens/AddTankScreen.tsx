@@ -56,10 +56,11 @@ export default function AddTankScreen() {
   const loadNextTankNumber = async () => {
     try {
       const response = await tankService.getNextTankNumber(stationId);
-      if (response.success) {
+      const tankNumber = response.data;
+      if (response.success && tankNumber != null) {
         setFormData(prev => ({
           ...prev,
-          tankNumber: response.data.toString(),
+          tankNumber: tankNumber.toString(),
         }));
       }
     } catch (error) {
@@ -169,20 +170,16 @@ export default function AddTankScreen() {
 
   const [showFuelTypePicker, setShowFuelTypePicker] = useState(false);
 
-  const getFuelTypeColor = (fuelType: PumpFuelType) => {
-    switch (fuelType) {
-      case 'PMS':
-        return '#FF6B35';
-      case 'AGO':
-        return '#4CAF50';
-      case 'DPK':
-        return '#2196F3';
-      case 'LPG':
-        return '#FF9800';
-      default:
-        return '#F0C38E';
-    }
-  };
+   const getFuelTypeColor = (fuelType: PumpFuelType) => {
+     switch (fuelType) {
+       case 'PMS':
+         return '#FF6B35';
+       case 'AGO':
+         return '#4CAF50';
+       default:
+         return '#F0C38E';
+     }
+   };
 
   return (
     <LinearGradient colors={['#312C51', '#48426D']} style={styles.container}>

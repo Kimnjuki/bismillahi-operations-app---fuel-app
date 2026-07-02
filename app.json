@@ -1,28 +1,28 @@
 {
   "expo": {
-    "name": "Bismillahi Operations",
-    "slug": "bismillahi-operations",
+    "name": "Fuelr",
+    "slug": "fuelr",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "icon": "./assets/icon/screen.png",
+    "userInterfaceStyle": "dark",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#312C51"
+      "backgroundColor": "#131313"
     },
     "assetBundlePatterns": [
       "**/*"
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.bismillahi.operations"
+      "bundleIdentifier": "com.fuelr.operations"
     },
     "android": {
-      "package": "com.bismillahi.operations",
+      "package": "com.fuelr.operations",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/icon.png",
-        "backgroundColor": "#312C51"
+        "foregroundImage": "./assets/icon/screen.png",
+        "backgroundColor": "#131313"
       },
       "permissions": [
         "android.permission.INTERNET",
@@ -32,14 +32,21 @@
     "web": {
       "bundler": "metro"
     },
-    "platforms": ["ios", "android", "web"],
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
     "plugins": [
-      "expo-notifications"
+      "expo-notifications",
+      "@react-native-community/datetimepicker"
     ],
     "extra": {
       "eas": {
         "projectId": "your-project-id"
-      }
+      },
+      "supabaseUrl": "https://YOUR_SUPABASE_URL",
+      "supabaseAnonKey": "YOUR_SUPABASE_ANON_KEY"
     },
     "sdkVersion": "54.0.0"
   }

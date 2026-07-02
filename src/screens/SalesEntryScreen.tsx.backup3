@@ -1,0 +1,1207 @@
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  SafeAreaView,
+  Alert,
+  Dimensions,
+  TextInput,
+  Modal,
+  FlatList,
+} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../context/AuthContext';
+import { useNavigation } from '@react-navigation/native';
+import { supabase } from '../config/supabase';
+import { formatCurrency } from '../constants/currency';
+import { BatchPumpSale, BatchDrumSale, BatchSale, DEFAULT_BATCH_PUMP_SALE, DEFAULT_BATCH_DRUM_SALE } from '../types/sales';
+
+const { width } = Dimensions.get('window');
+
+const FUEL_TYPES = ['Petrol', 'Diesel', 'Kerosene', 'Gas']; // from types/sales.ts
+const PAYMENT_METHODS = ['cash', 'card', 'credit']; // from types/sales.ts
+const CUSTOMERS = ['Walk-in Custom', 'Regular Customer', 'Corporate Client'];
+const STATIONS = ['ISSIRO STATION', 'DEPOT ISSIRO', 'RUNGU STATION', 'DUNGU STATION', 'DURBA STATION', 'NIANGARA STATION'];
+const DRUM_STATIONS = ['DEPOT ISSIRO', 'DUNGU STATION'];
+
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+export default function SalesEntryScreen() {
+  const { appUser } = useAuth();
+  const navigation = useNavigation();
+   
+  const userStation = appUser?.station_id;
+  const [transactions, setTransactions] = useState<BatchSale[]>([
+    // Start with one empty transaction
+    {...DEFAULT_BATCH_PUMP_SALE, date: new Date().toISOString().split('T')[0]},
+  ]);
+  const [loading, setLoading] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [tempDate, setTempDate] = useState({ year: new Date().getFullYear(), month: new Date().getMonth() + 1, day: new Date().getDate() });
+  const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth() + 1);
+  const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
+  const [batchDate, setBatchDate] = useState(new Date().toISOString().split('T')[0]); // for batch date setting
+
+  const getDaysInMonth = (year: number, month: number) => new Date(year, month, 0).getDate();
+  const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month - 1, 1).getDay();
+
+  const openDatePicker = () => {
+    const selected = new Date(`${batchDate}T00:00:00`);
+    setCalendarMonth(selected.getMonth() + 1);
+    setCalendarYear(selected.getFullYear());
+    setTempDate({
+      year: selected.getFullYear(),
+      month: selected.getMonth() + 1,
+      day: selected.getDate(),
+    });
+    setShowDatePicker(true);
+  };
+
+  const applyTempDate = () => {
+    const month = tempDate.month || calendarMonth;
+    const year = tempDate.year || calendarYear;
+    const day = Math.min(tempDate.day || 1, getDaysInMonth(year, month));
+    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    setBatchDate(dateStr);
+    setShowDatePicker(false);
+  };
+
+  const changeCalendarMonth = (delta: number) => {
+    let m = calendarMonth + delta;
+    let y = calendarYear;
+    if (m < 1) { m = 12; y -= 1; }
+    if (m > 12) { m = 1; y += 1; }
+    setCalendarMonth(m);
+    setCalendarYear(y);
+  };
+
+  const renderCalendar = () => {
+    const daysInMonth = getDaysInMonth(calendarYear, calendarMonth);
+    const firstDay = getFirstDayOfMonth(calendarYear, calendarMonth);
+    const daysToRender: Array<{ day: number; empty: boolean }> = [];
+    for (let i = 0; i < firstDay; i++) {
+      daysToRender.push({ day: 0, empty: true });
+    }
+    for (let day = 1; day <= daysInMonth; day++) {
+      daysToRender.push({ day, empty: false });
+    }
+    return daysToRender;
+  };
+
+  const refreshDefaultTransactions = () => {
+    setTransactions([
+      {...DEFAULT_BATCH_PUMP_SALE, date: new Date().toISOString().split('T')[0]},
+    ]);
+  };
+
+  const getItemTypeForStation = (station: string): 'pump' | 'drum' => {
+    return DRUM_STATIONS.includes(station) ? 'drum' : 'pump';
+  };
+
+  const getAvailableStations = (): string[] => {
+    if (appUser?.role === 'admin') {
+      return STATIONS;
+    }
+    if (userStation) {
+      const stationName = STATIONS.find(station => 
+        station.toLowerCase().replace(/\s+/g, '_') === userStation.toLowerCase()
+      );
+      return stationName ? [stationName] : STATIONS;
+    }
+    return STATIONS;
+  };
+
+  const handleStationChange = (transactionIndex: number, newStation: string) => {
+    const newItemType = getItemTypeForStation(newStation);
+    setTransactions(prev => {
+      const updatedTransactions = [...prev];
+      const transaction = updatedTransactions[transactionIndex];
+      if ('pumpNumber' in transaction) {
+        // Pump transaction
+        updatedTransactions[transactionIndex] = {
+          ...transaction,
+          station: newStation,
+        } as BatchPumpSale;
+      } else {
+        // Drum transaction
+        updatedTransactions[transactionIndex] = {
+          ...transaction,
+          station: newStation,
+        } as BatchDrumSale;
+      }
+      return updatedTransactions;
+    });
+  };
+
+  const calculateTotals = (transactions: BatchSale[]) => {
+    let subtotal = 0;
+    transactions.forEach(t => {
+      if ('pumpNumber' in t) {
+        const volume = parseFloat(t.volumeLiters) || 0;
+        const price = parseFloat(t.pricePerLiter) || 0;
+        subtotal += volume * price;
+      } else {
+        const quantity = parseInt(t.quantity) || 0;
+        const price = parseFloat(t.pricePerDrum) || 0;
+        subtotal += quantity * price;
+      }
+    });
+    const tax = subtotal * 0; // tax rate 0% for now
+    const total = subtotal + tax;
+    return { subtotal, tax, total };
+  };
+
+  const updateTransactionField = (transactionIndex: number, field: keyof BatchSale, value: any) => {
+    setTransactions(prev => {
+      const updatedTransactions = [...prev];
+      const transaction = updatedTransactions[transactionIndex];
+      if ('pumpNumber' in transaction) {
+        // Pump transaction
+        updatedTransactions[transactionIndex] = {
+          ...transaction,
+          [field]: value,
+        } as BatchPumpSale;
+      } else {
+        // Drum transaction
+        updatedTransactions[transactionIndex] = {
+          ...transaction,
+          [field]: value,
+        } as BatchDrumSale;
+      }
+      return updatedTransactions;
+    });
+  };
+
+  const addTransaction = (type: 'pump' | 'drum') => {
+    const newTransaction = type === 'pump' 
+      ? {...DEFAULT_BATCH_PUMP_SALE, date: batchDate} 
+      : {...DEFAULT_BATCH_DRUM_SALE, date: batchDate};
+    setTransactions(prev => [...prev, newTransaction]);
+  };
+
+  const removeTransaction = (index: number) => {
+    setTransactions(prev => {
+      const updated = [...prev];
+      updated.splice(index, 1);
+      // Ensure at least one transaction remains
+      if (updated.length === 0) {
+        return [{...DEFAULT_BATCH_PUMP_SALE, date: batchDate}];
+      }
+      return updated;
+    });
+  };
+
+  const copyTransaction = (index: number) => {
+    const transactionToCopy = transactions[index];
+    setTransactions(prev => [...prev, transactionToCopy]);
+  };
+
+  const batchSetField = (field: keyof BatchSale, value: any) => {
+    setTransactions(prev => prev.map(t => {
+      if ('pumpNumber' in t) {
+        return {...t, [field]: value} as BatchPumpSale;
+      } else {
+        return {...t, [field]: value} as BatchDrumSale;
+      }
+    }));
+  };
+
+  const handleSaveDraft = async () => {
+    try {
+      setLoading(true);
+      Alert.alert('Success', 'Batch saved as draft');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to save draft');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmitBatch = async () => {
+    try {
+      setLoading(true);
+      for (const transaction of transactions) {
+        if ('pumpNumber' in transaction) {
+          // Pump sale
+          const { error } = await supabase
+            .from('daily_sales')
+            .insert({
+              sale_type: 'pump',
+              fuel_type: transaction.fuelType,
+              station_name: transaction.station,
+              pump_number: parseInt(transaction.pumpNumber) || 1,
+              volume_liters: parseFloat(transaction.volumeLiters) || 0,
+              price_per_liter: parseFloat(transaction.pricePerLiter) || 0,
+              total_amount: (parseFloat(transaction.volumeLiters) || 0) * (parseFloat(transaction.pricePerLiter) || 0),
+              payment_method: transaction.payment,
+              sale_date: transaction.date,
+              created_by: appUser?.id,
+            });
+          if (error) {
+            console.error('Error inserting pump sale:', error);
+          }
+        } else {
+          // Drum sale
+          const { error } = await supabase
+            .from('daily_sales')
+            .insert({
+              sale_type: 'drum',
+              drum_type: transaction.drumType,
+              station_name: transaction.station,
+              quantity: parseInt(transaction.quantity) || 0,
+              price_per_drum: parseFloat(transaction.pricePerDrum) || 0,
+              total_amount: (parseInt(transaction.quantity) || 0) * (parseFloat(transaction.pricePerDrum) || 0),
+              payment_method: transaction.payment,
+              sale_date: transaction.date,
+              created_by: appUser?.id,
+            });
+          if (error) {
+            console.error('Error inserting drum sale:', error);
+          }
+        }
+      }
+      Alert.alert('Success', 'Batch submitted successfully');
+      // Reset to one empty transaction
+      setTransactions([{...DEFAULT_BATCH_PUMP_SALE, date: batchDate}]);
+    } catch (error) {
+      console.error('Error submitting batch:', error);
+      Alert.alert('Error', 'Failed to submit batch');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePrint = () => {
+    Alert.alert('Print', 'Print functionality will be implemented');
+  };
+
+  const handlePrint = () => {
+    Alert.alert('Print', 'Print functionality will be implemented');
+  };
+
+  const requestCameraPermission = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Required', 'Camera permission is needed to capture receipt images.');
+      return false;
+    }
+    return true;
+  };
+
+  const requestMediaLibraryPermission = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Required', 'Media library permission is needed to select receipt images.');
+      return false;
+    }
+    return true;
+  };
+
+  const captureImage = async () => {
+    const hasPermission = await requestCameraPermission();
+    if (!hasPermission) return;
+
+    try {
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: 'images' as any,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        setReceiptImages(prev => [...prev, result.assets[0].uri]);
+      }
+    } catch (error) {
+      console.error('Camera capture error:', error);
+      Alert.alert('Error', 'Failed to capture image');
+    }
+  };
+
+  const selectImageFromGallery = async () => {
+    const hasPermission = await requestMediaLibraryPermission();
+    if (!hasPermission) return;
+
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: 'images' as any,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        setReceiptImages(prev => [...prev, result.assets[0].uri]);
+      }
+    } catch (error) {
+      console.error('Gallery selection error:', error);
+      Alert.alert('Error', 'Failed to select image from gallery');
+    }
+  };
+
+  const showImageOptions = () => {
+    Alert.alert(
+      'Add Receipt Image',
+      'Choose how you want to add the image',
+      [
+        { text: 'Camera', onPress: captureImage },
+        { text: 'Gallery', onPress: selectImageFromGallery },
+        { text: 'Cancel', style: 'cancel' }
+      ]
+    );
+  };
+
+  const removeImage = (index: number) => {
+    setReceiptImages(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const renderItemCard = (item: SalesItem) => (
+    <View style={styles.itemCard}>
+      <View style={styles.itemHeader}>
+        <View style={styles.itemDropdown}>
+          <Text style={styles.itemLabel}>ITEM</Text>
+          <TouchableOpacity 
+            style={styles.dropdownContainer}
+            onPress={() => {
+              const currentIndex = FUEL_TYPES.indexOf(item.itemName);
+              const nextIndex = (currentIndex + 1) % FUEL_TYPES.length;
+              updateItem(item.id, 'itemName', FUEL_TYPES[nextIndex]);
+            }}
+          >
+            <Text style={styles.dropdownText}>{item.itemName}</Text>
+            <Ionicons name="chevron-down" size={16} color="#666" />
+          </TouchableOpacity>
+        </View>
+       <TouchableOpacity
+          style={styles.deleteButton}
+          onPress={() => removeItem(item.id)}
+      >
+          <Ionicons name="trash" size={20} color="#FF6B6B" />
+      </TouchableOpacity>
+    </View>
+      
+      <View style={styles.itemInputs}>
+        {item.itemType === 'pump' ? (
+          <>
+           <View style={styles.inputGroup}>
+               <Text style={styles.inputLabel}>QTY (LITERS)</Text>
+               <TextInput
+                 style={styles.inputContainer}
+                 value={item.quantity.toString()}
+                 onChangeText={(text) => {
+                   const value = parseFloat(text) || 0;
+                   // Validate quantity is positive and reasonable
+                   if (value < 0) {
+                     Alert.alert('Error', 'Quantity cannot be negative');
+                     return;
+                   }
+                   if (value > 50000) {
+                     Alert.alert('Error', 'Quantity exceeds maximum limit of 50,000 liters');
+                     return;
+                   }
+                   updateItem(item.id, 'quantity', value);
+                 }}
+                 keyboardType="numeric"
+                 placeholder="0.00"
+               />
+             </View>
+          <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>RATE (CDF)</Text>
+              <TextInput
+                style={styles.inputContainer}
+                value={item.rate.toString()}
+                onChangeText={(text) => updateItem(item.id, 'rate', parseFloat(text) || 0)}
+                keyboardType="numeric"
+            placeholder="0"
+              />
+            </View>
+          </>
+        ) : (
+          <>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>NUMBER OF DRUMS</Text>
+              <TextInput
+                style={styles.inputContainer}
+                value={item.quantity.toString()}
+                onChangeText={(text) => updateItem(item.id, 'quantity', parseInt(text) || 0)}
+            keyboardType="numeric"
+                placeholder="0"
+          />
+        </View>
+        <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>RATE (CDF)</Text>
+              <TextInput
+                style={styles.inputContainer}
+                value={item.rate.toString()}
+                onChangeText={(text) => updateItem(item.id, 'rate', parseFloat(text) || 0)}
+            keyboardType="numeric"
+                placeholder="0"
+              />
+            </View>
+          </>
+        )}
+        <View style={styles.totalContainer}>
+          <Text style={styles.itemTotal}>{formatCurrency.CDF(item.total)}</Text>
+          <Text style={styles.itemTotalUSD}>
+            {formatCurrency.USD(item.total / 2850.50)}
+          </Text>
+        </View>
+      </View>
+
+      {item.itemType === 'drum' && (
+        <Text style={styles.drumInfo}>
+          {item.quantity} Drums x 205L = {item.quantity * 205}L total. Rate auto-calculated.
+        </Text>
+      )}
+    </View>
+  );
+
+  return (
+    <View style={styles.container}>
+      <SafeAreaView style={styles.safeArea}>
+        {/* Header */}
+        <LinearGradient colors={['#312C51', '#48426D']} style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={24} color="#ffffff" />
+          </TouchableOpacity>
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerTitle}>Batch Sales Entry</Text>
+            <TouchableOpacity style={styles.dateButton} onPress={openDatePicker}>
+              <Text style={styles.headerDate}>📅 {batchDate}</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.headerSpacer} />
+        </LinearGradient>
+
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          {/* Sales Information - Batch Header */}
+          <View style={styles.salesInfoContainer}>
+            <View style={styles.infoRow}>
+              <View style={styles.infoGroup}>
+                <Text style={styles.infoLabel}>Station</Text>
+                <TouchableOpacity 
+                  style={styles.infoDropdown}
+                  onPress={() => {
+                    const availableStations = getAvailableStations();
+                    const currentIndex = availableStations.indexOf(transactions[0].station);
+                    const nextIndex = (currentIndex + 1) % availableStations.length;
+                    batchSetField('station', availableStations[nextIndex]);
+                  }}
+                >
+                  <Text style={styles.infoText}>{transactions[0].station}</Text>
+                  <Ionicons name="chevron-down" size={16} color="#666" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.infoGroup}>
+                <Text style={styles.infoLabel}>Customer</Text>
+                <TouchableOpacity style={styles.infoDropdown}>
+                  <Text style={styles.infoText}>{transactions[0].customer}</Text>
+                  <Ionicons name="chevron-down" size={16} color="#666" />
+                </TouchableOpacity>
+              </View>
+            </View>
+            <View style={styles.infoRow}>
+              <View style={styles.infoGroup}>
+                <Text style={styles.infoLabel}>Payment</Text>
+                <TouchableOpacity style={styles.infoDropdown}>
+                  <Text style={styles.infoText}>{transactions[0].payment}</Text>
+                  <Ionicons name="chevron-down" size={16} color="#666" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.infoGroup}>
+                <Text style={styles.infoLabel}>Ref No</Text>
+                <TextInput
+                  style={styles.infoInput}
+                  value={transactions[0].refNo}
+                  onChangeText={(text) => batchSetField('refNo', text)}
+                  placeholder="e.g., 1001"
+                  placeholderTextColor="#999"
+                />
+              </View>
+            </View>
+          </View>
+
+          {/* Batch Actions */}
+          <View style={styles.batchActionsContainer}>
+            <TouchableOpacity style={styles.batchActionButton} onPress={() => batchSetField('date', batchDate)}>
+              <Ionicons name="calendar" size={20} color="#312C51" />
+              <Text style={styles.batchActionText}>Apply Date to All</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.batchActionButton} onPress={() => batchSetField('payment', transactions[0].payment)}>
+              <Ionicons name="cash" size={20} color="#312C51" />
+              <Text style={styles.batchActionText}>Apply Payment to All</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.batchActionButton} onPress={() => batchSetField('customer', transactions[0].customer)}>
+              <Ionicons name="person" size={20} color="#312C51" />
+              <Text style={styles.batchActionText}>Apply Customer to All</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.batchActionButton} onPress={() => batchSetField('station', transactions[0].station)}>
+              <Ionicons name="map" size={20} color="#312C51" />
+              <Text style={styles.batchActionText}>Apply Station to All</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Transactions List */}
+          <View style={styles.transactionsContainer}>
+            {transactions.map((transaction, index) => (
+              <View key={index} style={styles.transactionCard}>
+                <View style={styles.transactionHeader}>
+                  <Text style={styles.transactionType}>
+                    {('pumpNumber' in transaction) ? 'PUMP SALE' : 'DRUM SALE'}
+                  </Text>
+                  <View style={styles.transactionActions}>
+                    <TouchableOpacity style={styles.actionButton} onPress={() => copyTransaction(index)}>
+                      <Ionicons name="copy" size={18} color="#312C51" />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.actionButton} onPress={() => removeTransaction(index)}>
+                      <Ionicons name="trash" size={18} color="#FF6B6B" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                
+                {('pumpNumber' in transaction) ? (
+                  // Pump Transaction Fields
+                  <>
+                    <View style={styles.fieldRow}>
+                      <View style={styles.fieldGroup}>
+                        <Text style={styles.fieldLabel}>Pump #</Text>
+                        <TextInput
+                          style={styles.fieldInput}
+                          value={transaction.pumpNumber}
+                          onChangeText={(text) => updateTransactionField(index, 'pumpNumber', text)}
+                          keyboardType="numeric"
+                          placeholder="1"
+                        />
+                      </View>
+                      <View style={styles.fieldGroup}>
+                        <Text style={styles.fieldLabel}>Fuel Type</Text>
+                        <TouchableOpacity 
+                          style={styles.fieldDropdown}
+                          onPress={() => {
+                            const currentIndex = FUEL_TYPES.indexOf(transaction.fuelType);
+                            const nextIndex = (currentIndex + 1) % FUEL_TYPES.length;
+                            updateTransactionField(index, 'fuelType', FUEL_TYPES[nextIndex]);
+                          }}
+                        >
+                          <Text style={styles.fieldText}>{transaction.fuelType}</Text>
+                          <Ionicons name="chevron-down" size={16} color="#666" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                    
+                    <View style={styles.fieldRow}>
+                      <View style={styles.fieldGroup}>
+                        <Text style={styles.fieldLabel}>Volume (Liters)</Text>
+                        <TextInput
+                          style={styles.fieldInput}
+                          value={transaction.volumeLiters}
+                          onChangeText={(text) => updateTransactionField(index, 'volumeLiters', text)}
+                          keyboardType="numeric"
+                          placeholder="0.00"
+                        />
+                      </View>
+                      <View style={styles.fieldGroup}>
+                        <Text style={styles.fieldLabel}>Price/Liter (CDF)</Text>
+                        <TextInput
+                          style={styles.fieldInput}
+                          value={transaction.pricePerLiter}
+                          onChangeText={(text) => updateTransactionField(index, 'pricePerLiter', text)}
+                          keyboardType="numeric"
+                          placeholder="0"
+                        />
+                      </View>
+                    </View>
+                  </>
+                ) : (
+                  // Drum Transaction Fields
+                  <>
+                    <View style={styles.fieldRow}>
+                      <View style={styles.fieldGroup}>
+                        <Text style={styles.fieldLabel}>Drum Type</Text>
+                        <TouchableOpacity 
+                          style={styles.fieldDropdown}
+                          onPress={() => {
+                            const currentIndex = (['200L Drum', '100L Drum', '50L Drum', '25L Jerrycan'] as DrumType[]).indexOf(transaction.drumType as DrumType);
+                            const nextIndex = (currentIndex + 1) % 4;
+                            const drumTypes = ['200L Drum', '100L Drum', '50L Drum', '25L Jerrycan'];
+                            updateTransactionField(index, 'drumType', drumTypes[nextIndex]);
+                          }}
+                        >
+                          <Text style={styles.fieldText}>{transaction.drumType}</Text>
+                          <Ionicons name="chevron-down" size={16} color="#666" />
+                        </TouchableOpacity>
+                      </View>
+                      <View style={styles.fieldGroup}>
+                        <Text style={styles.fieldLabel}>Customer</Text>
+                        <TextInput
+                          style={styles.fieldInput}
+                          value={transaction.customer}
+                          onChangeText={(text) => updateTransactionField(index, 'customer', text)}
+                          placeholder="Walk-in Custom"
+                        />
+                      </View>
+                    </View>
+                    
+                    <View style={styles.fieldRow}>
+                      <View style={styles.fieldGroup}>
+                        <Text style={styles.fieldLabel}>Quantity (Drums)</Text>
+                        <TextInput
+                          style={styles.fieldInput}
+                          value={transaction.quantity}
+                          onChangeText={(text) => updateTransactionField(index, 'quantity', text)}
+                          keyboardType="numeric"
+                          placeholder="0"
+                        />
+                      </View>
+                      <View style={styles.fieldGroup}>
+                        <Text style={styles.fieldLabel}>Price/Drum (CDF)</Text>
+                        <TextInput
+                          style={styles.fieldInput}
+                          value={transaction.pricePerDrum}
+                          onChangeText={(text) => updateTransactionField(index, 'pricePerDrum', text)}
+                          keyboardType="numeric"
+                          placeholder="0"
+                        />
+                      </View>
+                    </View>
+                  </>
+                )}
+                
+                {/* Transaction Total */}
+                <View style={styles.transactionTotal}>
+                  <Text style={styles.transactionTotalLabel}>TOTAL:</Text>
+                  <Text style={styles.transactionTotalAmount}>
+                    {formatCurrency.CDF(
+                      ('pumpNumber' in transaction)
+                        ? (parseFloat(transaction.volumeLiters) || 0) * (parseFloat(transaction.pricePerLiter) || 0)
+                        : (parseInt(transaction.quantity) || 0) * (parseFloat(transaction.pricePerDrum) || 0)
+                    )}
+                  </Text>
+                </View>
+              </View>
+            ))}
+            
+            {/* Add Transaction Button */}
+            <View style={styles.addTransactionSection}>
+              <TouchableOpacity style={styles.addTransactionButton} onPress={() => addTransaction('pump')}>
+                <Ionicons name="add" size={24} color="#312C51" />
+                <Text style={styles.addTransactionText}>Add Pump Transaction</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.addTransactionButton} onPress={() => addTransaction('drum')}>
+                <Ionicons name="add" size={24} color="#312C51" />
+                <Text style={styles.addTransactionText}>Add Drum Transaction</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Summary */}
+          <View style={styles.summaryContainer}>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Subtotal</Text>
+              <View style={styles.summaryValue}>
+                <Text style={styles.summaryAmount}>{formatCurrency.CDF(calculateTotals(transactions).subtotal)}</Text>
+                <Text style={styles.summaryAmountUSD}>
+                  {formatCurrency.USD(calculateTotals(transactions).subtotal / 2850.50)}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Tax (0%)</Text>
+              <View style={styles.summaryValue}>
+                <Text style={styles.summaryAmount}>{formatCurrency.CDF(calculateTotals(transactions).tax)}</Text>
+                <Text style={styles.summaryAmountUSD}>
+                  {formatCurrency.USD(calculateTotals(transactions).tax / 2850.50)}
+                </Text>
+              </View>
+            </View>
+            <View style={[styles.summaryRow, styles.totalRow]}>
+              <Text style={styles.totalLabel}>TOTAL</Text>
+              <View style={styles.summaryValue}>
+                <Text style={styles.totalAmount}>{formatCurrency.CDF(calculateTotals(transactions).total)}</Text>
+                <Text style={styles.totalAmountUSD}>
+                  {formatCurrency.USD(calculateTotals(transactions).total / 2850.50)}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.exchangeRateText}>
+              Exchange Rate: 1 USD = {formatCurrency.CDF(2850.50)} (Rate: 0.00035078)
+            </Text>
+          </View>
+        </ScrollView>
+
+        {/* Footer Buttons */}
+        <View style={styles.footer}>
+          <TouchableOpacity 
+            style={styles.saveDraftButton}
+            onPress={handleSaveDraft}
+            disabled={loading}
+          >
+            <Text style={styles.saveDraftText}>Save Draft</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.submitButton}
+            onPress={handleSubmitBatch}
+            disabled={loading}
+          >
+            <Text style={styles.submitText}>Submit Batch</Text>
+          </TouchableOpacity>
+            <TouchableOpacity
+          style={styles.printButton}
+          onPress={handlePrint}
+          disabled={loading}
+          >
+            <Text style={styles.printText}>Print</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Date Picker Modal */}
+        <Modal visible={showDatePicker} transparent animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={styles.datePickerModal}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Select Date</Text>
+                <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                  <Ionicons name="close" size={24} color="#333" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.calendarHeader}>
+                <TouchableOpacity onPress={() => changeCalendarMonth(-1)}>
+                  <Ionicons name="chevron-back" size={24} color="#312C51" />
+                </TouchableOpacity>
+                <Text style={styles.calendarMonthYear}>
+                  {MONTHS[calendarMonth - 1]} {calendarYear}
+                </Text>
+                <TouchableOpacity onPress={() => changeCalendarMonth(1)}>
+                  <Ionicons name="chevron-forward" size={24} color="#312C51" />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.calendarWeekDays}>
+                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
+                  <React.Fragment key={index}>
+                    <View style={styles.weekDayCell}>
+                      <Text style={styles.weekDayText}>{day}</Text>
+                    </View>
+                  </React.Fragment>
+                ))}
+              </View>
+              <FlatList
+                data={renderCalendar()}
+                numColumns={7}
+                keyExtractor={(item, index) => index.toString()}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={[
+                      styles.calendarDayCell,
+                      !item.empty && tempDate.day === item.day && tempDate.month === calendarMonth && tempDate.year === calendarYear && styles.selectedDayCell,
+                    ]}
+                    onPress={() => !item.empty && setTempDate({ ...tempDate, day: item.day })}
+                  >
+                    <Text style={[
+                      styles.calendarDayText,
+                      !item.empty && tempDate.day === item.day && tempDate.month === calendarMonth && tempDate.year === calendarYear && styles.selectedDayText,
+                    ]}>
+                      {item.day || ''}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                scrollEnabled={false}
+              />
+              <TouchableOpacity style={styles.applyDateButton} onPress={applyTempDate}>
+                <Text style={styles.applyDateText}>Apply Date</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      </SafeAreaView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  safeArea: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    justifyContent: 'space-between',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    flex: 1,
+    textAlign: 'center',
+  },
+  headerDate: {
+    fontSize: 12,
+    color: '#ffffff',
+    opacity: 0.8,
+  },
+  content: {
+    flex: 1,
+    padding: 16,
+  },
+  salesInfoContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 16,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    marginBottom: 12,
+  },
+  infoGroup: {
+    flex: 1,
+    marginHorizontal: 4,
+  },
+  infoLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 4,
+    fontWeight: '600',
+  },
+  infoDropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f8f8f8',
+    borderRadius: 6,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  infoInput: {
+    backgroundColor: '#f8f8f8',
+    borderRadius: 6,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    fontSize: 14,
+    color: '#333',
+  },
+  infoText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  batchActionsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 16,
+  },
+  batchActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 6,
+    padding: 12,
+    margin: 4,
+    borderWeight: 1,
+    borderColor: '#e0e0e0',
+  },
+  batchActionText: {
+    fontSize: 12,
+    color: '#312C51',
+    marginLeft: 6,
+  },
+  transactionsContainer: {
+    marginBottom: 16,
+  },
+  transactionCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  transactionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  transactionType: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#312C51',
+  },
+  transactionActions: {
+    flexDirection: 'row',
+  },
+  actionButton: {
+    padding: 6,
+    marginLeft: 4,
+  },
+  fieldRow: {
+    flexDirection: 'row',
+    marginBottom: 12,
+  },
+  fieldGroup: {
+    flex: 1,
+    marginHorizontal: 4,
+  },
+  fieldLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 4,
+    fontWeight: '600',
+  },
+  fieldInput: {
+    backgroundColor: '#f8f8f8',
+    borderRadius: 6,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    fontSize: 14,
+    color: '#333',
+  },
+  fieldDropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f8f8f8',
+    borderRadius: 6,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  fieldText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  transactionTotal: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+  },
+  transactionTotalLabel: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#666',
+  },
+  transactionTotalAmount: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  addTransactionSection: {
+    marginTop: 16,
+  },
+  addTransactionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    padding: 16,
+    marginVertical: 4,
+    borderWidth: 2,
+    borderColor: '#312C51',
+    borderStyle: 'dashed',
+  },
+  addTransactionText: {
+    fontSize: 16,
+    color: '#312C51',
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  summaryContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 16,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  summaryLabel: {
+    fontSize: 14,
+    color: '#666',
+  },
+  summaryValue: {
+    alignItems: 'flex-end',
+  },
+  summaryAmount: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  summaryAmountUSD: {
+    fontSize: 12,
+    color: '#666',
+  },
+  totalRow: {
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    paddingTop: 8,
+    marginTop: 8,
+  },
+  totalLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  totalAmount: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  totalAmountUSD: {
+    fontSize: 14,
+    color: '#666',
+  },
+  exchangeRateText: {
+    fontSize: 12,
+    color: '#999',
+    textAlign: 'center',
+    marginTop: 12,
+  },
+  footer: {
+    flexDirection: 'row',
+    padding: 16,
+    backgroundColor: '#ffffff',
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+  },
+  saveDraftButton: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    padding: 16,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#312C51',
+    alignItems: 'center',
+  },
+  saveDraftText: {
+    fontSize: 14,
+    color: '#312C51',
+    fontWeight: '600',
+  },
+  submitButton: {
+    flex: 1,
+    backgroundColor: '#312C51',
+    borderRadius: 8,
+    padding: 16,
+    marginHorizontal: 4,
+    alignItems: 'center',
+  },
+  submitText: {
+    fontSize: 14,
+    color: '#ffffff',
+    fontWeight: '600',
+  },
+  printButton: {
+    flex: 1,
+    backgroundColor: '#312C51',
+    borderRadius: 8,
+    padding: 16,
+    marginLeft: 8,
+    alignItems: 'center',
+  },
+  printText: {
+    fontSize: 14,
+    color: '#ffffff',
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  datePickerModal: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 20,
+    width: '90%',
+    maxWidth: 360,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  calendarMonthYear: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#312C51',
+  },
+  calendarWeekDays: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 8,
+  },
+  weekDayCell: {
+    width: 40,
+    alignItems: 'center',
+  },
+  weekDayText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666',
+  },
+  calendarDayCell: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  calendarDayText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  selectedDayCell: {
+    backgroundColor: '#F0C38E',
+    borderRadius: 20,
+  },
+  selectedDayText: {
+    color: '#312C51',
+    fontWeight: 'bold',
+  },
+  applyDateButton: {
+    backgroundColor: '#312C51',
+    borderRadius: 8,
+    padding: 14,
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  applyDateText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ffffff',
+  }
+};

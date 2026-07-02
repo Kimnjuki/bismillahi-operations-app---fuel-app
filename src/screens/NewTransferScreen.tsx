@@ -19,7 +19,8 @@ import { generateUUID } from '../utils/uuid';
 import { FundTransfer, Currency } from '../types';
 import { supabase } from '../config/supabase';
 import { fundTransferService } from '../services/fundTransferService';
-import { internalAccountService, InternalAccount, Station } from '../services/internalAccountService';
+import { internalAccountService } from '../services/internalAccountService';
+import { InternalAccount, Station } from '../types';
 
 const { width } = Dimensions.get('window');
 

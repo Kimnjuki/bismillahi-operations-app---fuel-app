@@ -1,31 +1,21 @@
 -- Update expense categories to match the new list
--- First, clear existing categories
-DELETE FROM expense_categories;
-
--- Insert the new expense categories
 INSERT INTO expense_categories (name, description) VALUES
 ('Generator', 'Generator fuel, maintenance, and related expenses'),
-('Worker\'s fare and lunch', 'Transportation and meal allowances for workers'),
-('Transport', 'General transportation expenses'),
-('Cleaning', 'Cleaning supplies and services'),
-('Communication', 'Phone bills, internet, and communication services'),
-('Travel expenses', 'Business travel and accommodation costs'),
-('Road use', 'Road maintenance and usage fees'),
-('Repair and maintenance', 'Equipment and facility repairs'),
-('Vehicle expenses', 'Vehicle maintenance, fuel, and related costs'),
-('Home bill', 'Home utility bills and expenses'),
-('Stationaries', 'Office supplies and stationery'),
-('Facilitation fees', 'Facilitation and service fees'),
-('Professional fees', 'Legal, accounting, and professional services'),
-('Salary', 'Employee salaries and wages'),
-('Offloading expenses', 'Loading and unloading costs'),
-('Charges and transactions', 'Bank charges and transaction fees'),
-('Discount', 'Discounts and rebates given'),
+('Workers'' fare and lunch', 'Transportation and meal allowances for workers'),
+('Security', 'Security services and equipment'),
+('Transport', 'General transportation and logistics expenses'),
 ('Government expenses', 'Government fees, taxes, and compliance costs'),
-('Medical', 'Medical expenses and health-related costs'),
-('Rent', 'Rental payments for facilities and equipment'),
+('Offloading expenses', 'Loading, unloading, and handling expenses'),
+('Medical', 'Medical and health-related expenses'),
+('Travel expenses', 'Business travel and accommodation costs'),
+('Communication', 'Phone, internet, and communication services'),
+('Salary', 'Employee salaries and wages'),
+('Stationaries', 'Office stationery and supplies'),
+('Discount', 'Discounts, rebates, and allowances'),
 ('Sadaqa', 'Charitable donations and religious contributions'),
-('Short', 'Short-term or miscellaneous expenses');
+('Repair and Maintenance', 'Equipment and facility repair and maintenance'),
+('Rent', 'Facility and equipment rental expenses')
+ON CONFLICT (name) DO NOTHING;
 
 -- Update the expenses table to ensure it can handle all categories
 ALTER TABLE expenses 

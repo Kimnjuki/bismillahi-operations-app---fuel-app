@@ -225,7 +225,6 @@ class SecurityMiddleware {
 
       // Sales endpoints
       'pump_sales': ['admin', 'manager', 'cashier'],
-      'drum_sales': ['admin', 'manager', 'cashier'],
 
       // Stock endpoints
       'stock_items': method === 'GET' ? ['admin', 'manager', 'cashier', 'viewer'] : ['admin', 'manager'],

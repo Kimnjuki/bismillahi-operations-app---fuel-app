@@ -1,4 +1,4 @@
-// Currency Constants for Bismillahi Operations
+// Currency Constants for Fuelr
 // Main currency: Congolese Franc (CDF)
 // Secondary currency: US Dollar (USD)
 

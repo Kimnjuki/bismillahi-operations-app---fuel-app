@@ -94,9 +94,7 @@ export const API_ENDPOINTS = {
   // Sales
   SALES: {
     PUMP_SALES: '/pump_sales',
-    DRUM_SALES: '/drum_sales',
     PUMP_SALE: (id: string) => `/pump_sales/${id}`,
-    DRUM_SALE: (id: string) => `/drum_sales/${id}`,
     STATS: '/sales/stats',
     REPORT: '/sales/report',
   },

@@ -95,6 +95,15 @@ export default function FuelDeliveryScreen() {
     loadData();
   }, [loadData]);
 
+  useEffect(() => {
+    if (transporters.length > 0 && !formData.transporterId) {
+      const gasnet = transporters.find(t => t.transporter_name === 'Gasnet Energy');
+      if (gasnet) {
+        setFormData(prev => ({ ...prev, transporterId: gasnet.id }));
+      }
+    }
+  }, [transporters, formData.transporterId]);
+
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
@@ -213,6 +222,10 @@ export default function FuelDeliveryScreen() {
 
   const handleViewTruckHistory = () => {
     navigation.navigate('TruckTransactionHistory' as never);
+  };
+
+  const handleViewDeliveredTrucks = () => {
+    navigation.navigate('TrucksDelivered' as never);
   };
 
   const getSelectedTransporter = () => {
@@ -348,12 +361,10 @@ export default function FuelDeliveryScreen() {
             
             {renderInput('Date', 'deliveryDate', 'Select Date')}
             
-            {renderPicker('Product', 'product', [
-              { id: 'Petrol', name: 'PMS' },
-              { id: 'Diesel', name: 'AGO' },
-              { id: 'Kerosene', name: 'Kerosene' },
-              { id: 'Gas', name: 'Gas' }
-            ], 'Select Product')}
+   {renderPicker('Product', 'product', [
+     { id: 'PMS', name: 'PMS' },
+     { id: 'AGO', name: 'AGO' }
+   ], 'Select Product')}
             
             {renderInput('Quantity Delivered (Liters)', 'quantity', 'Enter Quantity', 'numeric')}
             
@@ -402,6 +413,14 @@ export default function FuelDeliveryScreen() {
                 <Text style={styles.actionCardSubtitle}>View all transactions by truck</Text>
               </View>
               <Ionicons name="time" size={20} color="#ffffff" />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.actionCard} onPress={handleViewDeliveredTrucks}>
+              <View style={styles.actionCardContent}>
+                <Text style={styles.actionCardTitle}>Delivered Trucks</Text>
+                <Text style={styles.actionCardSubtitle}>Fuel deliveries per truck and station</Text>
+              </View>
+              <Ionicons name="bus" size={20} color="#ffffff" />
             </TouchableOpacity>
           </View>
 

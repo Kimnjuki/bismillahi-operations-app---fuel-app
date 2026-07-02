@@ -1,17 +1,64 @@
 import { supabase } from '../config/supabase';
 
+export type NotificationType = 
+  | 'stock_alert' 
+  | 'low_stock' 
+  | 'payment_received' 
+  | 'payment_due' 
+  | 'fuel_delivery'
+  | 'fuel_delivery_update'
+  | 'expense_alert'
+  | 'expense_approval'
+  | 'user_action'
+  | 'system_alert'
+  | 'daily_report'
+  | 'transfer_alert'
+  | 'account_alert'
+  | 'creditor_alert'
+  | 'supplier_alert'
+  | 'pump_alert'
+  | 'tank_alert'
+  | 'dipping_alert'
+  | 'sales_milestone'
+  | 'stock_reorder'
+  | 'security_alert';
+
+export type UserTargetRole = 'admin' | 'manager' | 'cashier' | 'viewer';
+
+export type NotificationPriority = 'low' | 'medium' | 'high' | 'critical';
+
+export type ActionType = 'view_stock' | 'view_payment' | 'view_delivery' | 'navigate' 
+  | 'view_expense' | 'view_report' | 'view_account' | 'view_transfer' 
+  | 'view_pump' | 'view_tank' | 'approve' | 'review' | 'acknowledge';
+
 export interface Notification {
   id: string;
-  type: 'stock_alert' | 'payment_received' | 'fuel_delivery' | 'payment_due' | 'low_stock';
+  type: NotificationType;
   title: string;
   description: string;
   timestamp: string;
   isRead: boolean;
-  actionType?: 'view_stock' | 'view_payment' | 'view_delivery' | 'navigate';
+  actionType?: ActionType;
   actionScreen?: string;
   actionData?: any;
-  priority: 'low' | 'medium' | 'high';
+  priority: NotificationPriority;
   stationId?: string;
+  targetRoles?: UserTargetRole[];  // If empty/null, visible to all
+  sourceUserName?: string;
+  sourceUserRole?: UserTargetRole;
+  category?: string;
+  expiryDate?: string;
+  requiresAcknowledgment?: boolean;
+  isAcknowledged?: boolean;
+  groupId?: string;
+  metadata?: {
+    amount?: number;
+    volume?: number;
+    fuelType?: string;
+    percentage?: number;
+    entityId?: string;
+    entityName?: string;
+  };
 }
 
 export interface NotificationCounts {
@@ -20,7 +67,28 @@ export interface NotificationCounts {
   stockAlerts: number;
   payments: number;
   deliveries: number;
+  expenses: number;
+  critical: number;
+  high: number;
 }
+
+export interface NotificationGroup {
+  id: string;
+  title: string;
+  notifications: Notification[];
+  count: number;
+  latestTimestamp: string;
+}
+
+export type NotificationCategory = 
+  | 'all' 
+  | 'stock' 
+  | 'sales_payments' 
+  | 'fuel_delivery' 
+  | 'expenses' 
+  | 'system' 
+  | 'accounts' 
+  | 'pump_tank';
 
 class NotificationService {
   private notifications: Notification[] = [];
@@ -49,7 +117,7 @@ class NotificationService {
         .limit(50);
 
       if (error) {
-        console.error('Error loading notifications:', error);
+        console.warn('Notifications load skipped:', error.message || error);
         return [];
       }
 
@@ -57,7 +125,7 @@ class NotificationService {
       this.notifyListeners();
       return this.notifications;
     } catch (error) {
-      console.error('Error loading notifications:', error);
+      console.warn('Notifications load skipped:', error instanceof Error ? error.message : error);
       return [];
     }
   }
@@ -131,26 +199,301 @@ class NotificationService {
     }
   }
 
-  // Get notification counts
+  // Get notification counts by category
   getNotificationCounts(): NotificationCounts {
+    const total = this.notifications.length;
     const unread = this.notifications.filter(n => !n.isRead).length;
     const stockAlerts = this.notifications.filter(n => 
-      n.type === 'stock_alert' || n.type === 'low_stock'
+      n.type === 'stock_alert' || n.type === 'low_stock' || n.type === 'stock_reorder'
     ).length;
     const payments = this.notifications.filter(n => 
       n.type === 'payment_received' || n.type === 'payment_due'
     ).length;
     const deliveries = this.notifications.filter(n => 
-      n.type === 'fuel_delivery'
+      n.type === 'fuel_delivery' || n.type === 'fuel_delivery_update'
     ).length;
+    const expenses = this.notifications.filter(n => 
+      n.type === 'expense_alert' || n.type === 'expense_approval'
+    ).length;
+    const critical = this.notifications.filter(n => n.priority === 'critical' && !n.isRead).length;
+    const high = this.notifications.filter(n => n.priority === 'high' && !n.isRead).length;
 
     return {
-      total: this.notifications.length,
+      total,
       unread,
       stockAlerts,
       payments,
       deliveries,
+      expenses,
+      critical,
+      high,
     };
+  }
+
+  // Get notifications filtered by target role
+  getNotificationsForRole(role: UserTargetRole, stationId?: string): Notification[] {
+    return this.notifications.filter(notification => {
+      // If no targetRoles specified, visible to all
+      if (!notification.targetRoles || notification.targetRoles.length === 0) {
+        return true;
+      }
+      // Check if user's role is in target roles
+      if (!notification.targetRoles.includes(role)) {
+        return false;
+      }
+      // Station-specific filtering
+      if (notification.stationId && stationId && notification.stationId !== stationId) {
+        return false;
+      }
+      return true;
+    });
+  }
+
+  // Filter notifications by category
+  filterByCategory(notifications: Notification[], category: NotificationCategory): Notification[] {
+    if (category === 'all') return notifications;
+    
+    const categoryMap: Record<NotificationCategory, NotificationType[]> = {
+      all: [],
+      stock: ['stock_alert', 'low_stock', 'stock_reorder'],
+      sales_payments: ['payment_received', 'payment_due', 'sales_milestone'],
+      fuel_delivery: ['fuel_delivery', 'fuel_delivery_update'],
+      expenses: ['expense_alert', 'expense_approval'],
+      system: ['system_alert', 'user_action', 'security_alert', 'daily_report'],
+      accounts: ['account_alert', 'creditor_alert', 'supplier_alert', 'transfer_alert'],
+      pump_tank: ['pump_alert', 'tank_alert', 'dipping_alert'],
+    };
+
+    const allowedTypes = categoryMap[category];
+    return notifications.filter(n => allowedTypes.includes(n.type));
+  }
+
+  // Group notifications by type category
+  groupByCategory(notifications: Notification[]): NotificationGroup[] {
+    const categoryMap: Record<string, { title: string; types: NotificationType[] }> = {
+      stock: { title: 'Stock Alerts', types: ['stock_alert', 'low_stock', 'stock_reorder'] },
+      payments: { title: 'Sales & Payments', types: ['payment_received', 'payment_due', 'sales_milestone'] },
+      deliveries: { title: 'Fuel Deliveries', types: ['fuel_delivery', 'fuel_delivery_update'] },
+      expenses: { title: 'Expenses', types: ['expense_alert', 'expense_approval'] },
+      system: { title: 'System Updates', types: ['system_alert', 'user_action', 'security_alert', 'daily_report'] },
+      accounts: { title: 'Accounts', types: ['account_alert', 'creditor_alert', 'supplier_alert', 'transfer_alert'] },
+      pumps: { title: 'Pumps & Tanks', types: ['pump_alert', 'tank_alert', 'dipping_alert'] },
+    };
+
+    return Object.entries(categoryMap).map(([key, config]) => {
+      const grouped = notifications.filter(n => config.types.includes(n.type));
+      return {
+        id: key,
+        title: config.title,
+        notifications: grouped,
+        count: grouped.length,
+        latestTimestamp: grouped.length > 0 
+          ? grouped.reduce((latest, n) => n.timestamp > latest ? n.timestamp : latest, grouped[0].timestamp)
+          : '',
+      };
+    }).filter(g => g.count > 0);
+  }
+
+  // Get notification priority color
+  getPriorityColor(priority: NotificationPriority): string {
+    switch (priority) {
+      case 'critical': return '#FF1744';
+      case 'high': return '#FF6B6B';
+      case 'medium': return '#F0C38E';
+      case 'low': return '#9E9E9E';
+    }
+  }
+
+  // Acknowledge a notification (for those that require acknowledgment)
+  async acknowledgeNotification(notificationId: string): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .update({ is_acknowledged: true })
+        .eq('id', notificationId);
+
+      if (error) {
+        console.error('Error acknowledging notification:', error);
+      }
+
+      this.notifications = this.notifications.map(n =>
+        n.id === notificationId ? { ...n, isAcknowledged: true } : n
+      );
+      this.notifyListeners();
+    } catch (error) {
+      console.error('Error acknowledging notification:', error);
+    }
+  }
+
+  // Get notifications that require acknowledgment
+  getPendingAcknowledgments(): Notification[] {
+    return this.notifications.filter(n => n.requiresAcknowledgment && !n.isAcknowledged);
+  }
+
+  // Get expired notifications
+  getExpiredNotifications(): Notification[] {
+    const now = new Date().toISOString();
+    return this.notifications.filter(n => n.expiryDate && n.expiryDate < now);
+  }
+
+  // Mark expired notifications as read automatically
+  async autoCleanExpired(): Promise<void> {
+    const expired = this.getExpiredNotifications();
+    for (const notification of expired) {
+      await this.markAsRead(notification.id);
+    }
+  }
+
+  // Get notification icon name by type
+  getNotificationIcon(type: NotificationType): string {
+    switch (type) {
+      case 'stock_alert':
+      case 'low_stock':
+      case 'stock_reorder':
+        return 'cube-outline';
+      case 'payment_received':
+        return 'card-outline';
+      case 'payment_due':
+        return 'time-outline';
+      case 'fuel_delivery':
+      case 'fuel_delivery_update':
+        return 'car-outline';
+      case 'expense_alert':
+      case 'expense_approval':
+        return 'cash-outline';
+      case 'user_action':
+        return 'person-outline';
+      case 'system_alert':
+        return 'settings-outline';
+      case 'daily_report':
+        return 'document-text-outline';
+      case 'transfer_alert':
+        return 'swap-horizontal-outline';
+      case 'account_alert':
+        return 'wallet-outline';
+      case 'creditor_alert':
+        return 'trending-down-outline';
+      case 'supplier_alert':
+        return 'trending-up-outline';
+      case 'pump_alert':
+        return 'water-outline';
+      case 'tank_alert':
+      case 'dipping_alert':
+        return 'server-outline';
+      case 'sales_milestone':
+        return 'trophy-outline';
+      case 'security_alert':
+        return 'shield-outline';
+      default:
+        return 'notifications-outline';
+    }
+  }
+
+  // Get notification color by type
+  getNotificationColor(type: NotificationType): string {
+    switch (type) {
+      case 'stock_alert':
+      case 'low_stock':
+      case 'stock_reorder':
+        return '#F0C38E';
+      case 'payment_received':
+      case 'sales_milestone':
+        return '#4CAF50';
+      case 'payment_due':
+        return '#FF6B6B';
+      case 'fuel_delivery':
+      case 'fuel_delivery_update':
+        return '#2196F3';
+      case 'expense_alert':
+        return '#FF9800';
+      case 'expense_approval':
+        return '#9C27B0';
+      case 'system_alert':
+      case 'security_alert':
+        return '#F44336';
+      case 'daily_report':
+        return '#00BCD4';
+      case 'transfer_alert':
+        return '#3F51B5';
+      case 'account_alert':
+        return '#8BC34A';
+      case 'creditor_alert':
+        return '#795548';
+      case 'supplier_alert':
+        return '#607D8B';
+      case 'pump_alert':
+        return '#03A9F4';
+      case 'tank_alert':
+      case 'dipping_alert':
+        return '#E91E63';
+      case 'user_action':
+        return '#FF5722';
+      default:
+        return '#9E9E9E';
+    }
+  }
+
+  // Get action button text by action type
+  getActionButtonText(actionType?: ActionType): string {
+    switch (actionType) {
+      case 'view_stock': return 'View Stock';
+      case 'view_payment': return 'View Payment';
+      case 'view_delivery': return 'View Delivery';
+      case 'view_expense': return 'View Expense';
+      case 'view_report': return 'View Report';
+      case 'view_account': return 'View Account';
+      case 'view_transfer': return 'View Transfer';
+      case 'view_pump': return 'View Pump';
+      case 'view_tank': return 'View Tank';
+      case 'approve': return 'Approve';
+      case 'review': return 'Review';
+      case 'acknowledge': return 'Acknowledge';
+      default: return 'View';
+    }
+  }
+
+  // Get action button icon by action type
+  getActionButtonIcon(actionType?: ActionType): string {
+    switch (actionType) {
+      case 'view_stock': return 'list-outline';
+      case 'view_payment': return 'card-outline';
+      case 'view_delivery': return 'car-outline';
+      case 'view_expense': return 'cash-outline';
+      case 'view_report': return 'document-text-outline';
+      case 'view_account': return 'wallet-outline';
+      case 'view_transfer': return 'swap-horizontal-outline';
+      case 'view_pump': return 'water-outline';
+      case 'view_tank': return 'server-outline';
+      case 'approve': return 'checkmark-circle-outline';
+      case 'review': return 'eye-outline';
+      case 'acknowledge': return 'hand-left-outline';
+      default: return 'chevron-forward-outline';
+    }
+  }
+
+  // Format notification timestamp
+  formatTimestamp(timestamp: string): string {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
+    const diffInDays = Math.floor(diffInHours / 24);
+
+    if (diffInHours < 1) {
+      const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
+      if (diffInMinutes < 1) return 'Just now';
+      return `${diffInMinutes}m ago`;
+    } else if (diffInHours < 24) {
+      return `${diffInHours}h ago`;
+    } else if (diffInDays === 1) {
+      return 'Yesterday';
+    } else if (diffInDays < 7) {
+      return `${diffInDays}d ago`;
+    } else if (diffInDays < 30) {
+      const weeks = Math.floor(diffInDays / 7);
+      return `${weeks}w ago`;
+    } else {
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
   }
 
   // Mark notification as read
@@ -219,7 +562,7 @@ class NotificationService {
     } catch (error) {
       console.error('Error creating notification:', error);
     }
-  }
+   }
 
   // Get notifications by type
   getNotificationsByType(type: Notification['type']): Notification[] {

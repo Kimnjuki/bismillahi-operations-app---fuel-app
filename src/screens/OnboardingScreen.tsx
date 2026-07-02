@@ -5,7 +5,6 @@ import {
   Text,
   TouchableOpacity,
   ScrollView,
-  SafeAreaView,
   Alert,
   Dimensions,
 } from 'react-native';
@@ -13,12 +12,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../context/AuthContext';
 import { helpService, OnboardingStep } from '../services/helpService';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
 
 export default function OnboardingScreen() {
   const { appUser } = useAuth();
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [steps, setSteps] = useState<OnboardingStep[]>([]);
   const [progress, setProgress] = useState({ completed: 0, total: 0, percentage: 0 });
@@ -176,11 +177,11 @@ export default function OnboardingScreen() {
   if (loading) {
     return (
       <LinearGradient colors={['#667eea', '#764ba2']} style={styles.container}>
-        <SafeAreaView style={styles.safeArea}>
+        <View style={[styles.safeArea, { paddingTop: insets.top }]}>
           <View style={styles.loadingContainer}>
             <Text style={styles.loadingText}>Loading onboarding...</Text>
           </View>
-        </SafeAreaView>
+        </View>
       </LinearGradient>
     );
   }
@@ -191,7 +192,7 @@ export default function OnboardingScreen() {
 
   return (
     <LinearGradient colors={['#667eea', '#764ba2']} style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
+      <View style={[styles.safeArea, { paddingTop: insets.top }]}>
         <View style={styles.header}>
           <Text style={styles.title}>Getting Started</Text>
           <TouchableOpacity
@@ -220,7 +221,7 @@ export default function OnboardingScreen() {
             </TouchableOpacity>
           </View>
         )}
-      </SafeAreaView>
+      </View>
     </LinearGradient>
   );
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import {
   View,
   StyleSheet,
@@ -17,8 +17,9 @@ import { useNavigation } from '@react-navigation/native';
 import { useOffline } from '../hooks/useOffline';
 import { OfflineIndicator } from '../components/OfflineIndicator';
 import { useDashboardData } from '../hooks/useDashboardData';
+import { SkeletonLoader } from '../components/SkeletonLoader';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 interface DashboardStats {
   todaySales: number;
@@ -38,8 +39,114 @@ interface MenuItemType {
   gradient: [string, string];
 }
 
-export default function DashboardScreen() {
-  const { appUser, hasPermission, error: authError } = useAuth();
+// Memoized Stat Card component
+const StatCard = memo(({ 
+  title, 
+  value, 
+  subtitle, 
+  color 
+}: { 
+  title: string; 
+  value: string | number; 
+  subtitle: string; 
+  color: string;
+}) => (
+  <View style={[styles.statCard, { borderLeftColor: color }]}>
+    <Text style={styles.statTitle}>{title}</Text>
+    <Text style={[styles.statValue, { color }]}>{value}</Text>
+    <Text style={styles.statSubtitle}>{subtitle}</Text>
+  </View>
+));
+
+// Memoized Menu Item component
+const MenuItem = memo(({ 
+  item, 
+  canAccess, 
+  onPress 
+}: { 
+  item: MenuItemType; 
+  canAccess: boolean; 
+  onPress: (item: MenuItemType) => void;
+}) => (
+  <TouchableOpacity
+    style={[styles.menuItem, !canAccess && styles.menuItemDisabled]}
+    onPress={() => onPress(item)}
+    disabled={!canAccess}
+  >
+    <LinearGradient
+      colors={canAccess ? item.gradient : ['#E0E0E0', '#F5F5F5']}
+      style={styles.menuItemGradient}
+    >
+      <Text style={styles.menuItemIcon}>{item.icon}</Text>
+      <Text style={[styles.menuItemTitle, !canAccess && styles.menuItemTitleDisabled]}>
+        {item.title}
+      </Text>
+      <Text style={[styles.menuItemSubtitle, !canAccess && styles.menuItemSubtitleDisabled]}>
+        {item.subtitle}
+      </Text>
+    </LinearGradient>
+  </TouchableOpacity>
+));
+
+// Memoized Notification Preview component
+const NotificationPreview = memo(({ 
+  notification, 
+  onPress 
+}: { 
+  notification: any; 
+  onPress: () => void;
+}) => (
+  <TouchableOpacity
+    style={[
+      styles.notificationPreview,
+      !notification.isRead && styles.unreadNotificationPreview,
+    ]}
+    onPress={onPress}
+  >
+    <View style={styles.notificationPreviewContent}>
+      <Ionicons
+        name={
+          notification.type === 'low_stock' ? 'warning' :
+          notification.type === 'payment_received' ? 'card' :
+          notification.type === 'fuel_delivery' ? 'car' :
+          'notifications'
+        }
+        size={16}
+        color={
+          notification.type === 'low_stock' ? '#FF6B6B' :
+          notification.type === 'payment_received' ? '#4CAF50' :
+          notification.type === 'fuel_delivery' ? '#2196F3' :
+          '#F0C38E'
+        }
+      />
+      <Text style={styles.notificationPreviewTitle} numberOfLines={1}>
+        {notification.title}
+      </Text>
+      <Text style={styles.notificationPreviewDescription} numberOfLines={2}>
+        {notification.description}
+      </Text>
+    </View>
+  </TouchableOpacity>
+));
+
+// Dashboard Skeleton Loading component
+const DashboardSkeleton = memo(() => (
+  <LinearGradient colors={['#667eea', '#764ba2']} style={styles.container}>
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.skeletonHeader}>
+        <View style={styles.skeletonUserInfo}>
+          <View style={styles.skeletonTextLine} />
+          <View style={[styles.skeletonTextLine, { width: '30%' }]} />
+        </View>
+      </View>
+      <SkeletonLoader variant="kpi" count={4} />
+      <SkeletonLoader variant="card" count={4} />
+    </SafeAreaView>
+  </LinearGradient>
+));
+
+const DashboardScreen = memo(function DashboardScreen() {
+  const { appUser, hasPermission } = useAuth();
   const navigation = useNavigation();
   const { isOnline } = useOffline();
 
@@ -47,15 +154,18 @@ export default function DashboardScreen() {
     stats,
     notifications,
     statsLoading,
-    notificationsLoading,
     statsError,
     refetch,
-    isOnline: hookIsOnline,
   } = useDashboardData();
 
   const [refreshing, setRefreshing] = useState(false);
-  const [notificationCount, setNotificationCount] = useState(0);
 
+  // Memoized notification count
+  const notificationCount = useMemo(() => 
+    notifications.filter(n => !n.isRead).length,
+  [notifications]);
+
+  // Memoized menu items - stable reference
   const menuItems: MenuItemType[] = useMemo(() => [
     {
       title: 'Sales Entry',
@@ -114,20 +224,12 @@ export default function DashboardScreen() {
       gradient: ['#795548', '#8D6E63'],
     },
     {
-      title: 'Pump Management',
-      subtitle: 'Manage pumps',
+      title: 'Pump & Dipping',
+      subtitle: 'Readings, sales & tank dipping',
       icon: '⛽',
-      screen: 'PumpManagement',
+      screen: 'PumpAndDippingManagement',
       requiredRole: 'admin',
-      gradient: ['#E91E63', '#F06292'],
-    },
-    {
-      title: 'Pump Dipping',
-      subtitle: 'Tank readings & variance',
-      icon: '📊',
-      screen: 'PumpDippingManagement',
-      requiredRole: 'admin',
-      gradient: ['#3F51B5', '#5C6BC0'],
+      gradient: ['#E91E63', '#3F51B5'],
     },
     {
       title: 'Fuel Delivery',
@@ -195,18 +297,19 @@ export default function DashboardScreen() {
     },
   ], []);
 
-  useEffect(() => {
-    setNotificationCount(notifications.filter(n => !n.isRead).length);
-  }, [notifications]);
+  // Memoized permission checks for each menu item
+  const menuPermissions = useMemo(() => 
+    menuItems.map(item => hasPermission(item.requiredRole)),
+  [menuItems, hasPermission]);
 
+  // Memoized refresh handler
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    refetch();
-    setRefreshing(false);
+    Promise.resolve(refetch()).finally(() => setRefreshing(false));
   }, [refetch]);
 
+  // Memoized menu press handler
   const handleMenuPress = useCallback((item: MenuItemType) => {
-    // Special handling: map 'Reports' screen to the ReportsScreen
     if (item.screen === 'Reports') {
       (navigation as any).navigate('Reports');
       return;
@@ -215,56 +318,39 @@ export default function DashboardScreen() {
       Alert.alert('Access Denied', 'You do not have permission to access this feature.');
       return;
     }
-
     (navigation as any).navigate(item.screen);
   }, [hasPermission, navigation]);
 
-  const renderStatCard = (title: string, value: string | number, subtitle: string, color: string) => (
-    <View style={[styles.statCard, { borderLeftColor: color }]}>
-      <Text style={styles.statTitle}>{title}</Text>
-      <Text style={[styles.statValue, { color }]}>{value}</Text>
-      <Text style={styles.statSubtitle}>{subtitle}</Text>
-    </View>
-  );
+  // Memoized navigation to notifications
+  const handleNotificationsPress = useCallback(() => {
+    (navigation as any).navigate('Notifications');
+  }, [navigation]);
 
-  const renderMenuItem = (item: MenuItemType, index: number) => {
-    const canAccess = hasPermission(item.requiredRole);
-    
-    return (
-      <TouchableOpacity
-        key={index}
-        style={[styles.menuItem, !canAccess && styles.menuItemDisabled]}
-        onPress={() => handleMenuPress(item)}
-        disabled={!canAccess}
-      >
-        <LinearGradient
-          colors={canAccess ? item.gradient : ['#E0E0E0', '#F5F5F5']}
-          style={styles.menuItemGradient}
-        >
-          <Text style={styles.menuItemIcon}>{item.icon}</Text>
-          <Text style={[styles.menuItemTitle, !canAccess && styles.menuItemTitleDisabled]}>
-            {item.title}
-          </Text>
-          <Text style={[styles.menuItemSubtitle, !canAccess && styles.menuItemSubtitleDisabled]}>
-            {item.subtitle}
-          </Text>
-        </LinearGradient>
-      </TouchableOpacity>
-    );
-  };
+  // Memoized notification preview press
+  const handleNotificationPress = useCallback(() => {
+    (navigation as any).navigate('Notifications');
+  }, [navigation]);
 
+  // Memoized quick action handlers
+  const handleQuickSale = useCallback(() => {
+    handleMenuPress(menuItems[0]);
+  }, [handleMenuPress, menuItems]);
+
+  const handleAddExpense = useCallback(() => {
+    handleMenuPress(menuItems[3]);
+  }, [handleMenuPress, menuItems]);
+
+  const handleViewReports = useCallback(() => {
+    const reportsItem = menuItems.find(m => m.screen === 'Reports');
+    if (reportsItem) handleMenuPress(reportsItem);
+  }, [handleMenuPress, menuItems]);
+
+  // Show skeleton loading while data is loading
   if (statsLoading) {
-    return (
-      <LinearGradient colors={['#667eea', '#764ba2']} style={styles.container}>
-        <SafeAreaView style={styles.safeArea}>
-          <View style={styles.loadingContainer}>
-            <Text style={styles.loadingText}>Loading dashboard...</Text>
-          </View>
-        </SafeAreaView>
-      </LinearGradient>
-    );
+    return <DashboardSkeleton />;
   }
 
+  // Show error state
   if (statsError) {
     return (
       <LinearGradient colors={['#667eea', '#764ba2']} style={styles.container}>
@@ -305,7 +391,7 @@ export default function DashboardScreen() {
               <View style={styles.headerActions}>
                 <TouchableOpacity 
                   style={styles.notificationButton}
-                  onPress={() => navigation.navigate('Notifications' as never)}
+                  onPress={handleNotificationsPress}
                 >
                   <Ionicons name="notifications" size={24} color="#ffffff" />
                   {notificationCount > 0 && (
@@ -323,36 +409,43 @@ export default function DashboardScreen() {
 
           {/* Compact Stats Cards - 2x2 Grid */}
           <View style={styles.statsContainer}>
-            {renderStatCard('Sales', `₣${stats.todaySales.toLocaleString()}`, 'Today', '#4CAF50')}
-            {renderStatCard('Expenses', `₣${stats.todayExpenses.toLocaleString()}`, 'Today', '#FF9800')}
-            {renderStatCard('Alerts', stats.stockAlerts, 'Stock', '#F44336')}
-            {renderStatCard('Transfers', stats.pendingTransfers, 'Pending', '#2196F3')}
+            <StatCard title="Sales" value={`₣${stats.todaySales.toLocaleString()}`} subtitle="Today" color="#4CAF50" />
+            <StatCard title="Expenses" value={`₣${stats.todayExpenses.toLocaleString()}`} subtitle="Today" color="#FF9800" />
+            <StatCard title="Alerts" value={stats.stockAlerts} subtitle="Stock" color="#F44336" />
+            <StatCard title="Transfers" value={stats.pendingTransfers} subtitle="Pending" color="#2196F3" />
           </View>
 
-          {/* Compact Menu Grid - 3 columns for better space usage */}
+          {/* Compact Menu Grid */}
           <View style={styles.menuGrid}>
-            {menuItems.map((item, index) => renderMenuItem(item, index))}
+            {menuItems.map((item, index) => (
+              <MenuItem
+                key={item.screen}
+                item={item}
+                canAccess={menuPermissions[index]}
+                onPress={handleMenuPress}
+              />
+            ))}
           </View>
 
           {/* Quick Actions Row */}
           <View style={styles.quickActionsContainer}>
             <TouchableOpacity 
               style={styles.quickActionButton}
-              onPress={() => handleMenuPress(menuItems[0])} // Sales Entry
+              onPress={handleQuickSale}
             >
               <Text style={styles.quickActionIcon}>💰</Text>
               <Text style={styles.quickActionText}>Quick Sale</Text>
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.quickActionButton}
-              onPress={() => handleMenuPress(menuItems[2])} // Expenses
+              onPress={handleAddExpense}
             >
               <Text style={styles.quickActionIcon}>💸</Text>
               <Text style={styles.quickActionText}>Add Expense</Text>
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.quickActionButton}
-              onPress={() => handleMenuPress(menuItems.find(m => m.screen === 'Reports') || menuItems[11])} // Reports
+              onPress={handleViewReports}
             >
               <Text style={styles.quickActionIcon}>📊</Text>
               <Text style={styles.quickActionText}>View Reports</Text>
@@ -364,44 +457,17 @@ export default function DashboardScreen() {
             <View style={styles.notificationsContainer}>
               <View style={styles.notificationsHeader}>
                 <Text style={styles.notificationsTitle}>Recent Alerts</Text>
-                <TouchableOpacity onPress={() => navigation.navigate('Notifications' as never)}>
+                <TouchableOpacity onPress={handleNotificationsPress}>
                   <Text style={styles.viewAllText}>View All</Text>
                 </TouchableOpacity>
               </View>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 {notifications.slice(0, 3).map((notification) => (
-                  <TouchableOpacity
+                  <NotificationPreview
                     key={notification.id}
-                    style={[
-                      styles.notificationPreview,
-                      !notification.isRead && styles.unreadNotificationPreview,
-                    ]}
-                    onPress={() => navigation.navigate('Notifications' as never)}
-                  >
-                    <View style={styles.notificationPreviewContent}>
-                      <Ionicons
-                        name={
-                          notification.type === 'low_stock' ? 'warning' :
-                          notification.type === 'payment_received' ? 'card' :
-                          notification.type === 'fuel_delivery' ? 'car' :
-                          'notifications'
-                        }
-                        size={16}
-                        color={
-                          notification.type === 'low_stock' ? '#FF6B6B' :
-                          notification.type === 'payment_received' ? '#4CAF50' :
-                          notification.type === 'fuel_delivery' ? '#2196F3' :
-                          '#F0C38E'
-                        }
-                      />
-                      <Text style={styles.notificationPreviewTitle} numberOfLines={1}>
-                        {notification.title}
-                      </Text>
-                      <Text style={styles.notificationPreviewDescription} numberOfLines={2}>
-                        {notification.description}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
+                    notification={notification}
+                    onPress={handleNotificationPress}
+                  />
                 ))}
               </ScrollView>
             </View>
@@ -410,7 +476,7 @@ export default function DashboardScreen() {
       </SafeAreaView>
     </LinearGradient>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -649,5 +715,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: 'rgba(255, 255, 255, 0.7)',
     lineHeight: 16,
+  },
+  skeletonHeader: {
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 10,
+  },
+  skeletonUserInfo: {
+    gap: 8,
+  },
+  skeletonTextLine: {
+    width: '60%',
+    height: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 4,
   },
 });

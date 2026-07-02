@@ -10,32 +10,40 @@ export const useNotifications = () => {
   const [loading, setLoading] = useState(false);
   const [config, setConfig] = useState<NotificationConfig>(notificationService.getConfiguration());
 
-  // Load notifications
-  const loadNotifications = useCallback(async () => {
-    if (!appUser?.id) return;
+// Load notifications
+   const loadNotifications = useCallback(async () => {
+     if (!appUser?.id) return;
 
-    setLoading(true);
-    try {
-      const userNotifications = await notificationService.getNotifications(appUser?.id || '');
-      setNotifications(userNotifications);
-    } catch (error) {
-      console.error('Error loading notifications:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [appUser?.id]);
+     setLoading(true);
+     try {
+       const userNotifications = await notificationService.getNotifications(appUser?.id || '');
+       setNotifications(userNotifications);
+     } catch (error) {
+       console.error('Error loading notifications:', error);
+       if (error instanceof Error) {
+         console.error('Error message:', error.message);
+         console.error('Error stack:', error.stack);
+       }
+     } finally {
+       setLoading(false);
+     }
+   }, [appUser?.id]);
 
-  // Load unread count
-  const loadUnreadCount = useCallback(async () => {
-    if (!appUser?.id) return;
+// Load unread count
+   const loadUnreadCount = useCallback(async () => {
+     if (!appUser?.id) return;
 
-    try {
-      const count = await notificationService.getUnreadCount(appUser?.id || '');
-      setUnreadCount(count);
-    } catch (error) {
-      console.error('Error loading unread count:', error);
-    }
-  }, [appUser?.id]);
+     try {
+       const count = await notificationService.getUnreadCount(appUser?.id || '');
+       setUnreadCount(count);
+     } catch (error) {
+       console.error('Error loading unread count:', error);
+       if (error instanceof Error) {
+         console.error('Error message:', error.message);
+         console.error('Error stack:', error.stack);
+       }
+     }
+   }, [appUser?.id]);
 
   // Mark notification as read
   const markAsRead = useCallback(async (notificationId: string) => {
@@ -93,7 +101,7 @@ export const useNotifications = () => {
     try {
       await notificationService.sendPushNotification(
         'Test Notification',
-        'This is a test notification from Bismillahi Operations'
+        'This is a test notification from Fuelr'
       );
     } catch (error) {
       console.error('Error sending test notification:', error);

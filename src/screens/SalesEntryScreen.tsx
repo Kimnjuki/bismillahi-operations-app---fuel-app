@@ -18,8 +18,8 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../config/supabase';
 import { formatCurrency } from '../constants/currency';
-import { BatchPumpSale, BatchDrumSale, BatchSale, DEFAULT_BATCH_PUMP_SALE, DEFAULT_BATCH_DRUM_SALE, PumpAttendantSummary } from '../types/sales';
-import { DrumType, FuelType } from '../types';
+import { BatchPumpSale, DEFAULT_BATCH_PUMP_SALE, PumpAttendantSummary } from '../types/sales';
+import { FuelType } from '../types';
 
 const { width } = Dimensions.get('window');
 
@@ -27,7 +27,6 @@ const FUEL_TYPES = ['PMS', 'AGO'];
 const PAYMENT_METHODS = ['cash', 'card', 'credit'];
 const CUSTOMERS = ['Walk-in Custom', 'Regular Customer', 'Corporate Client'];
 const STATIONS = ['ISSIRO STATION', 'DEPOT ISSIRO', 'RUNGU STATION', 'DUNGU STATION', 'DURBA STATION', 'NIANGARA STATION'];
-const DRUM_STATIONS = ['DEPOT ISSIRO', 'DUNGU STATION'];
 
 // Pre-defined pump attendants (can be extended)
 const PUMP_ATTENDANTS = ['Attendant 1', 'Attendant 2', 'Attendant 3', 'Attendant 4', 'Attendant 5'];
@@ -42,7 +41,7 @@ export default function SalesEntryScreen() {
   const navigation = useNavigation();
    
   const userStation = appUser?.station_id;
-  const [transactions, setTransactions] = useState<BatchSale[]>([
+  const [transactions, setTransactions] = useState<BatchPumpSale[]>([
     {...DEFAULT_BATCH_PUMP_SALE, date: new Date().toISOString().split('T')[0]},
   ]);
   const [loading, setLoading] = useState(false);
@@ -94,10 +93,6 @@ export default function SalesEntryScreen() {
     return daysToRender;
   };
 
-  const getItemTypeForStation = (station: string): 'pump' | 'drum' => {
-    return DRUM_STATIONS.includes(station) ? 'drum' : 'pump';
-  };
-
   const getAvailableStations = (): string[] => {
     if (appUser?.role === 'admin') return STATIONS;
     if (userStation) {
@@ -109,16 +104,12 @@ export default function SalesEntryScreen() {
     return STATIONS;
   };
 
-  const isDrumStation = (station: string): boolean => {
-    return DRUM_STATIONS.includes(station) || station.toLowerCase().includes('issiro');
-  };
-
   // ===== PER-ATTENDANT AGGREGATION =====
   const attendantSummaries = useMemo((): PumpAttendantSummary[] => {
     const map = new Map<string, PumpAttendantSummary>();
     
     transactions.forEach(t => {
-      if ('pumpNumber' in t && t.pumpAttendant) {
+      if (t.pumpAttendant) {
         const key = `${t.pumpAttendant}-${t.pumpNumber}-${t.fuelType}`;
         const vol = parseFloat(t.volumeLiters) || 0;
         const price = parseFloat(t.pricePerLiter) || 0;
@@ -147,25 +138,13 @@ export default function SalesEntryScreen() {
     const map = new Map<FuelType, { volume: number; amount: number }>();
     
     transactions.forEach(t => {
-      if ('pumpNumber' in t) {
-        const ft = t.fuelType;
-        const vol = parseFloat(t.volumeLiters) || 0;
-        const price = parseFloat(t.pricePerLiter) || 0;
-        const current = map.get(ft) || { volume: 0, amount: 0 };
-        current.volume += vol;
-        current.amount += vol * price;
-        map.set(ft, current);
-      } else {
-        // Drum sales counted separately
-        const ft: FuelType = 'PMS'; // drums default to PMS for aggregation
-        const qty = parseInt(t.quantity) || 0;
-        const price = parseFloat(t.pricePerDrum) || 0;
-        const liters = qty * (t.drumType === '200L Drum' ? 200 : t.drumType === '100L Drum' ? 100 : t.drumType === '50L Drum' ? 50 : 25);
-        const current = map.get(ft) || { volume: 0, amount: 0 };
-        current.volume += liters;
-        current.amount += qty * price;
-        map.set(ft, current);
-      }
+      const ft = t.fuelType;
+      const vol = parseFloat(t.volumeLiters) || 0;
+      const price = parseFloat(t.pricePerLiter) || 0;
+      const current = map.get(ft) || { volume: 0, amount: 0 };
+      current.volume += vol;
+      current.amount += vol * price;
+      map.set(ft, current);
     });
     
     return Array.from(map.entries()).map(([fuelType, data]) => ({
@@ -175,32 +154,12 @@ export default function SalesEntryScreen() {
     }));
   }, [transactions]);
 
-  const handleStationChange = (transactionIndex: number, newStation: string) => {
-    const newItemType = getItemTypeForStation(newStation);
-    setTransactions(prev => {
-      const updatedTransactions = [...prev];
-      const transaction = updatedTransactions[transactionIndex];
-      if ('pumpNumber' in transaction) {
-        updatedTransactions[transactionIndex] = { ...transaction, station: newStation } as BatchPumpSale;
-      } else {
-        updatedTransactions[transactionIndex] = { ...transaction, station: newStation } as BatchDrumSale;
-      }
-      return updatedTransactions;
-    });
-  };
-
-  const calculateTotals = (transactions: BatchSale[]) => {
+  const calculateTotals = (transactions: BatchPumpSale[]) => {
     let subtotal = 0;
     transactions.forEach(t => {
-      if ('pumpNumber' in t) {
-        const volume = parseFloat(t.volumeLiters) || 0;
-        const price = parseFloat(t.pricePerLiter) || 0;
-        subtotal += volume * price;
-      } else {
-        const quantity = parseInt(t.quantity) || 0;
-        const price = parseFloat(t.pricePerDrum) || 0;
-        subtotal += quantity * price;
-      }
+      const volume = parseFloat(t.volumeLiters) || 0;
+      const price = parseFloat(t.pricePerLiter) || 0;
+      subtotal += volume * price;
     });
     const tax = subtotal * 0;
     const total = subtotal + tax;
@@ -210,21 +169,13 @@ export default function SalesEntryScreen() {
   const updateTransactionField = (transactionIndex: number, field: string, value: any) => {
     setTransactions(prev => {
       const updatedTransactions = [...prev];
-      const transaction = updatedTransactions[transactionIndex];
-      if ('pumpNumber' in transaction) {
-        updatedTransactions[transactionIndex] = { ...transaction, [field]: value } as BatchPumpSale;
-      } else {
-        updatedTransactions[transactionIndex] = { ...transaction, [field]: value } as BatchDrumSale;
-      }
+      updatedTransactions[transactionIndex] = { ...updatedTransactions[transactionIndex], [field]: value } as BatchPumpSale;
       return updatedTransactions;
     });
   };
 
-  const addTransaction = (type: 'pump' | 'drum') => {
-    const newTransaction = type === 'pump' 
-      ? {...DEFAULT_BATCH_PUMP_SALE, date: batchDate} 
-      : {...DEFAULT_BATCH_DRUM_SALE, date: batchDate};
-    setTransactions(prev => [...prev, newTransaction]);
+  const addTransaction = () => {
+    setTransactions(prev => [...prev, {...DEFAULT_BATCH_PUMP_SALE, date: batchDate}]);
   };
 
   const removeTransaction = (index: number) => {
@@ -241,11 +192,8 @@ export default function SalesEntryScreen() {
     setTransactions(prev => [...prev, transactionToCopy]);
   };
 
-  const batchSetField = (field: keyof BatchSale, value: any) => {
-    setTransactions(prev => prev.map(t => {
-      if ('pumpNumber' in t) return {...t, [field]: value} as BatchPumpSale;
-      else return {...t, [field]: value} as BatchDrumSale;
-    }));
+  const batchSetField = (field: keyof BatchPumpSale, value: any) => {
+    setTransactions(prev => prev.map(t => ({...t, [field]: value} as BatchPumpSale)));
   };
 
   const handleSaveDraft = async () => {
@@ -265,7 +213,7 @@ export default function SalesEntryScreen() {
       
       // Validate: pump sales must have attendant assigned
       for (const transaction of transactions) {
-        if ('pumpNumber' in transaction && !transaction.pumpAttendant) {
+        if (!transaction.pumpAttendant) {
           const idx = transactions.indexOf(transaction) + 1;
           const pumpNum = transaction.pumpNumber || '?';
           Alert.alert(
@@ -279,44 +227,23 @@ export default function SalesEntryScreen() {
       }
 
       for (const transaction of transactions) {
-        if ('pumpNumber' in transaction) {
-          // Pump sale with attendant
-          const { error } = await supabase
-            .from('daily_sales')
-            .insert({
-              sale_type: 'pump',
-              fuel_type: transaction.fuelType,
-              station_name: transaction.station,
-              pump_number: parseInt(transaction.pumpNumber) || 1,
-              volume_liters: parseFloat(transaction.volumeLiters) || 0,
-              price_per_liter: parseFloat(transaction.pricePerLiter) || 0,
-              total_amount: (parseFloat(transaction.volumeLiters) || 0) * (parseFloat(transaction.pricePerLiter) || 0),
-              payment_method: transaction.payment,
-              sale_date: transaction.date,
-              created_by: appUser?.id,
-              pump_attendant: transaction.pumpAttendant,
-            });
-          if (error) {
-            console.error('Error inserting pump sale:', error);
-          }
-        } else {
-          // Drum sale
-          const { error } = await supabase
-            .from('daily_sales')
-            .insert({
-              sale_type: 'drum',
-              drum_type: transaction.drumType,
-              station_name: transaction.station,
-              quantity: parseInt(transaction.quantity) || 0,
-              price_per_drum: parseFloat(transaction.pricePerDrum) || 0,
-              total_amount: (parseInt(transaction.quantity) || 0) * (parseFloat(transaction.pricePerDrum) || 0),
-              payment_method: transaction.payment,
-              sale_date: transaction.date,
-              created_by: appUser?.id,
-            });
-          if (error) {
-            console.error('Error inserting drum sale:', error);
-          }
+        const { error } = await supabase
+          .from('daily_sales')
+          .insert({
+            sale_type: 'pump',
+            fuel_type: transaction.fuelType,
+            station_name: transaction.station,
+            pump_number: parseInt(transaction.pumpNumber) || 1,
+            volume_liters: parseFloat(transaction.volumeLiters) || 0,
+            price_per_liter: parseFloat(transaction.pricePerLiter) || 0,
+            total_amount: (parseFloat(transaction.volumeLiters) || 0) * (parseFloat(transaction.pricePerLiter) || 0),
+            payment_method: transaction.payment,
+            sale_date: transaction.date,
+            created_by: appUser?.id,
+            pump_attendant: transaction.pumpAttendant,
+          });
+        if (error) {
+          console.error('Error inserting pump sale:', error);
         }
       }
 
@@ -438,7 +365,7 @@ export default function SalesEntryScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Per-Attendant Summary (visible when there are pump transactions) */}
+          {/* Per-Attendant Summary */}
           {attendantSummaries.length > 0 && (
             <View style={styles.summaryCard}>
               <View style={styles.summaryCardHeader}>
@@ -487,9 +414,7 @@ export default function SalesEntryScreen() {
             {transactions.map((transaction, index) => (
               <View key={index} style={styles.transactionCard}>
                 <View style={styles.transactionHeader}>
-                  <Text style={styles.transactionType}>
-                    {('pumpNumber' in transaction) ? 'PUMP SALE' : 'DRUM SALE'}
-                  </Text>
+                  <Text style={styles.transactionType}>PUMP SALE</Text>
                   <View style={styles.transactionActions}>
                     <TouchableOpacity style={styles.actionButton} onPress={() => copyTransaction(index)}>
                       <Ionicons name="copy" size={18} color="#312C51" />
@@ -500,160 +425,103 @@ export default function SalesEntryScreen() {
                   </View>
                 </View>
                 
-                {('pumpNumber' in transaction) ? (
-                  // Pump Transaction Fields
-                  <>
-                    <View style={styles.fieldRow}>
-                      <View style={styles.fieldGroup}>
-                        <Text style={styles.fieldLabel}>Pump #</Text>
-                        <TextInput
-                          style={styles.fieldInput}
-                          value={transaction.pumpNumber}
-                          onChangeText={(text) => updateTransactionField(index, 'pumpNumber', text)}
-                          keyboardType="numeric"
-                          placeholder="1"
-                        />
-                      </View>
-                      <View style={styles.fieldGroup}>
-                        <Text style={styles.fieldLabel}>Fuel Type</Text>
-                        <TouchableOpacity 
-                          style={styles.fieldDropdown}
-                          onPress={() => {
-                            const currentIndex = FUEL_TYPES.indexOf(transaction.fuelType);
-                            const nextIndex = (currentIndex + 1) % FUEL_TYPES.length;
-                            updateTransactionField(index, 'fuelType', FUEL_TYPES[nextIndex]);
-                          }}
-                        >
-                          <Text style={styles.fieldText}>{transaction.fuelType}</Text>
-                          <Ionicons name="chevron-down" size={16} color="#666" />
-                        </TouchableOpacity>
-                      </View>
+                {/* Pump Transaction Fields */}
+                <>
+                  <View style={styles.fieldRow}>
+                    <View style={styles.fieldGroup}>
+                      <Text style={styles.fieldLabel}>Pump #</Text>
+                      <TextInput
+                        style={styles.fieldInput}
+                        value={transaction.pumpNumber}
+                        onChangeText={(text) => updateTransactionField(index, 'pumpNumber', text)}
+                        keyboardType="numeric"
+                        placeholder="1"
+                      />
                     </View>
+                    <View style={styles.fieldGroup}>
+                      <Text style={styles.fieldLabel}>Fuel Type</Text>
+                      <TouchableOpacity 
+                        style={styles.fieldDropdown}
+                        onPress={() => {
+                          const currentIndex = FUEL_TYPES.indexOf(transaction.fuelType);
+                          const nextIndex = (currentIndex + 1) % FUEL_TYPES.length;
+                          updateTransactionField(index, 'fuelType', FUEL_TYPES[nextIndex]);
+                        }}
+                      >
+                        <Text style={styles.fieldText}>{transaction.fuelType}</Text>
+                        <Ionicons name="chevron-down" size={16} color="#666" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
 
-                    {/* PUMP ATTENDANT FIELD */}
-                    <View style={styles.fieldRow}>
-                      <View style={styles.fieldGroup}>
-                        <Text style={styles.fieldLabel}>Pump Attendant</Text>
-                        <TouchableOpacity 
-                          style={[styles.fieldDropdown, styles.attendantField]}
-                          onPress={() => {
-                            const currentIndex = PUMP_ATTENDANTS.indexOf(transaction.pumpAttendant);
-                            const nextIndex = (currentIndex + 1) % PUMP_ATTENDANTS.length;
-                            updateTransactionField(index, 'pumpAttendant', PUMP_ATTENDANTS[nextIndex]);
-                          }}
-                        >
-                          <View style={styles.attendantDropdownContent}>
-                            <Ionicons name="person" size={16} color="#312C51" />
-                            <Text style={[styles.fieldText, { marginLeft: 6 }]}>
-                              {transaction.pumpAttendant || 'Select Attendant'}
-                            </Text>
-                          </View>
-                          <Ionicons name="chevron-down" size={16} color="#666" />
-                        </TouchableOpacity>
-                      </View>
-                      <View style={styles.fieldGroup}>
-                        <Text style={styles.fieldLabel}>Station</Text>
-                        <TouchableOpacity 
-                          style={styles.fieldDropdown}
-                          onPress={() => {
-                            const availableStations = getAvailableStations();
-                            const currentIndex = availableStations.indexOf(transaction.station);
-                            const nextIndex = (currentIndex + 1) % availableStations.length;
-                            updateTransactionField(index, 'station', availableStations[nextIndex]);
-                          }}
-                        >
-                          <Text style={styles.fieldText}>{transaction.station}</Text>
-                          <Ionicons name="chevron-down" size={16} color="#666" />
-                        </TouchableOpacity>
-                      </View>
+                  {/* PUMP ATTENDANT FIELD */}
+                  <View style={styles.fieldRow}>
+                    <View style={styles.fieldGroup}>
+                      <Text style={styles.fieldLabel}>Pump Attendant</Text>
+                      <TouchableOpacity 
+                        style={[styles.fieldDropdown, styles.attendantField]}
+                        onPress={() => {
+                          const currentIndex = PUMP_ATTENDANTS.indexOf(transaction.pumpAttendant);
+                          const nextIndex = (currentIndex + 1) % PUMP_ATTENDANTS.length;
+                          updateTransactionField(index, 'pumpAttendant', PUMP_ATTENDANTS[nextIndex]);
+                        }}
+                      >
+                        <View style={styles.attendantDropdownContent}>
+                          <Ionicons name="person" size={16} color="#312C51" />
+                          <Text style={[styles.fieldText, { marginLeft: 6 }]}>
+                            {transaction.pumpAttendant || 'Select Attendant'}
+                          </Text>
+                        </View>
+                        <Ionicons name="chevron-down" size={16} color="#666" />
+                      </TouchableOpacity>
                     </View>
-                    
-                    <View style={styles.fieldRow}>
-                      <View style={styles.fieldGroup}>
-                        <Text style={styles.fieldLabel}>Volume (Liters)</Text>
-                        <TextInput
-                          style={styles.fieldInput}
-                          value={transaction.volumeLiters}
-                          onChangeText={(text) => updateTransactionField(index, 'volumeLiters', text)}
-                          keyboardType="numeric"
-                          placeholder="0.00"
-                        />
-                      </View>
-                      <View style={styles.fieldGroup}>
-                        <Text style={styles.fieldLabel}>Price/Liter (CDF)</Text>
-                        <TextInput
-                          style={styles.fieldInput}
-                          value={transaction.pricePerLiter}
-                          onChangeText={(text) => updateTransactionField(index, 'pricePerLiter', text)}
-                          keyboardType="numeric"
-                          placeholder="0"
-                        />
-                      </View>
+                    <View style={styles.fieldGroup}>
+                      <Text style={styles.fieldLabel}>Station</Text>
+                      <TouchableOpacity 
+                        style={styles.fieldDropdown}
+                        onPress={() => {
+                          const availableStations = getAvailableStations();
+                          const currentIndex = availableStations.indexOf(transaction.station);
+                          const nextIndex = (currentIndex + 1) % availableStations.length;
+                          updateTransactionField(index, 'station', availableStations[nextIndex]);
+                        }}
+                      >
+                        <Text style={styles.fieldText}>{transaction.station}</Text>
+                        <Ionicons name="chevron-down" size={16} color="#666" />
+                      </TouchableOpacity>
                     </View>
-                  </>
-                ) : (
-                  // Drum Transaction Fields
-                  <>
-                    <View style={styles.fieldRow}>
-                      <View style={styles.fieldGroup}>
-                        <Text style={styles.fieldLabel}>Drum Type</Text>
-                        <TouchableOpacity 
-                          style={styles.fieldDropdown}
-                          onPress={() => {
-                            const currentIndex = (['200L Drum', '100L Drum', '50L Drum', '25L Jerrycan'] as DrumType[]).indexOf(transaction.drumType as DrumType);
-                            const nextIndex = (currentIndex + 1) % 4;
-                            const drumTypes = ['200L Drum', '100L Drum', '50L Drum', '25L Jerrycan'];
-                            updateTransactionField(index, 'drumType', drumTypes[nextIndex]);
-                          }}
-                        >
-                          <Text style={styles.fieldText}>{transaction.drumType}</Text>
-                          <Ionicons name="chevron-down" size={16} color="#666" />
-                        </TouchableOpacity>
-                      </View>
-                      <View style={styles.fieldGroup}>
-                        <Text style={styles.fieldLabel}>Customer</Text>
-                        <TextInput
-                          style={styles.fieldInput}
-                          value={transaction.customer}
-                          onChangeText={(text) => updateTransactionField(index, 'customer', text)}
-                          placeholder="Walk-in Custom"
-                        />
-                      </View>
+                  </View>
+                  
+                  <View style={styles.fieldRow}>
+                    <View style={styles.fieldGroup}>
+                      <Text style={styles.fieldLabel}>Volume (Liters)</Text>
+                      <TextInput
+                        style={styles.fieldInput}
+                        value={transaction.volumeLiters}
+                        onChangeText={(text) => updateTransactionField(index, 'volumeLiters', text)}
+                        keyboardType="numeric"
+                        placeholder="0.00"
+                      />
                     </View>
-                    
-                    <View style={styles.fieldRow}>
-                      <View style={styles.fieldGroup}>
-                        <Text style={styles.fieldLabel}>Quantity (Drums)</Text>
-                        <TextInput
-                          style={styles.fieldInput}
-                          value={transaction.quantity}
-                          onChangeText={(text) => updateTransactionField(index, 'quantity', text)}
-                          keyboardType="numeric"
-                          placeholder="0"
-                        />
-                      </View>
-                      <View style={styles.fieldGroup}>
-                        <Text style={styles.fieldLabel}>Price/Drum (CDF)</Text>
-                        <TextInput
-                          style={styles.fieldInput}
-                          value={transaction.pricePerDrum}
-                          onChangeText={(text) => updateTransactionField(index, 'pricePerDrum', text)}
-                          keyboardType="numeric"
-                          placeholder="0"
-                        />
-                      </View>
+                    <View style={styles.fieldGroup}>
+                      <Text style={styles.fieldLabel}>Price/Liter (CDF)</Text>
+                      <TextInput
+                        style={styles.fieldInput}
+                        value={transaction.pricePerLiter}
+                        onChangeText={(text) => updateTransactionField(index, 'pricePerLiter', text)}
+                        keyboardType="numeric"
+                        placeholder="0"
+                      />
                     </View>
-                  </>
-                )}
+                  </View>
+                </>
                 
                 {/* Transaction Total */}
                 <View style={styles.transactionTotal}>
                   <Text style={styles.transactionTotalLabel}>TOTAL:</Text>
                   <Text style={styles.transactionTotalAmount}>
                     {formatCurrency.CDF(
-                      ('pumpNumber' in transaction)
-                        ? (parseFloat(transaction.volumeLiters) || 0) * (parseFloat(transaction.pricePerLiter) || 0)
-                        : (parseInt(transaction.quantity) || 0) * (parseFloat(transaction.pricePerDrum) || 0)
+                      (parseFloat(transaction.volumeLiters) || 0) * (parseFloat(transaction.pricePerLiter) || 0)
                     )}
                   </Text>
                 </View>
@@ -662,13 +530,9 @@ export default function SalesEntryScreen() {
             
             {/* Add Transaction Button */}
             <View style={styles.addTransactionSection}>
-              <TouchableOpacity style={styles.addTransactionButton} onPress={() => addTransaction('pump')}>
+              <TouchableOpacity style={styles.addTransactionButton} onPress={addTransaction}>
                 <Ionicons name="add" size={24} color="#312C51" />
                 <Text style={styles.addTransactionText}>Add Pump Transaction</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.addTransactionButton} onPress={() => addTransaction('drum')}>
-                <Ionicons name="add" size={24} color="#312C51" />
-                <Text style={styles.addTransactionText}>Add Drum Transaction</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -702,268 +566,184 @@ export default function SalesEntryScreen() {
                 </Text>
               </View>
             </View>
-            <Text style={styles.exchangeRateText}>
-              Exchange Rate: 1 USD = {formatCurrency.CDF(2850.50)} (Rate: 0.00035078)
-            </Text>
           </View>
-
-          {/* Dip & Sales Reconciliation Info */}
-          <View style={styles.reconciliationCard}>
-            <View style={styles.reconciliationHeader}>
-              <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
-              <Text style={styles.reconciliationTitle}>Dip vs Sales Reconciliation</Text>
-            </View>
-            <Text style={styles.reconciliationText}>
-              Total PMS: {fuelTypeTotals.find(f => f.fuelType === 'PMS')?.totalVolume.toFixed(2) || '0.00'}L | 
-              Total AGO: {fuelTypeTotals.find(f => f.fuelType === 'AGO')?.totalVolume.toFixed(2) || '0.00'}L
-            </Text>
-            <Text style={styles.reconciliationText}>
-              These totals will be validated against tank dip readings in the Pump & Dipping Management screen.
-              The dip difference (Previous Dip - Current Dip + Offload) must match these sales figures per fuel type.
-            </Text>
-          </View>
-        </ScrollView>
-
-        {/* Footer Buttons */}
-        <View style={styles.footer}>
-          <TouchableOpacity 
-            style={styles.saveDraftButton}
-            onPress={handleSaveDraft}
-            disabled={loading}
-          >
-            <Text style={styles.saveDraftText}>Save Draft</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.submitButton}
-            onPress={handleSubmitBatch}
-            disabled={loading}
-          >
-            <Text style={styles.submitText}>Submit Batch</Text>
-          </TouchableOpacity>
+          
+          {/* Action Buttons */}
+          <View style={styles.actionButtonsContainer}>
             <TouchableOpacity
-          style={styles.printButton}
-          onPress={handlePrint}
-          disabled={loading}
-          >
-            <Text style={styles.printText}>Print</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Date Picker Modal */}
-        <Modal visible={showDatePicker} transparent animationType="fade">
-          <View style={styles.modalOverlay}>
-            <View style={styles.datePickerModal}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Select Date</Text>
-                <TouchableOpacity onPress={() => setShowDatePicker(false)}>
-                  <Ionicons name="close" size={24} color="#333" />
-                </TouchableOpacity>
-              </View>
-              <View style={styles.calendarHeader}>
-                <TouchableOpacity onPress={() => changeCalendarMonth(-1)}>
-                  <Ionicons name="chevron-back" size={24} color="#312C51" />
-                </TouchableOpacity>
-                <Text style={styles.calendarMonthYear}>
-                  {MONTHS[calendarMonth - 1]} {calendarYear}
-                </Text>
-                <TouchableOpacity onPress={() => changeCalendarMonth(1)}>
-                  <Ionicons name="chevron-forward" size={24} color="#312C51" />
-                </TouchableOpacity>
-              </View>
-              <View style={styles.calendarWeekDays}>
-                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
-                  <React.Fragment key={index}>
-                    <View style={styles.weekDayCell}>
-                      <Text style={styles.weekDayText}>{day}</Text>
-                    </View>
-                  </React.Fragment>
-                ))}
-              </View>
-              <FlatList
-                data={renderCalendar()}
-                numColumns={7}
-                keyExtractor={(item, index) => index.toString()}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={[
-                      styles.calendarDayCell,
-                      !item.empty && tempDate.day === item.day && tempDate.month === calendarMonth && tempDate.year === calendarYear && styles.selectedDayCell,
-                    ]}
-                    onPress={() => !item.empty && setTempDate({ ...tempDate, day: item.day })}
-                  >
-                    <Text style={[
-                      styles.calendarDayText,
-                      !item.empty && tempDate.day === item.day && tempDate.month === calendarMonth && tempDate.year === calendarYear && styles.selectedDayText,
-                    ]}>
-                      {item.day || ''}
-                    </Text>
-                  </TouchableOpacity>
-                )}
-                scrollEnabled={false}
-              />
-              <TouchableOpacity style={styles.applyDateButton} onPress={applyTempDate}>
-                <Text style={styles.applyDateText}>Apply Date</Text>
+              style={[styles.actionButtonPrimary, loading && styles.actionButtonDisabled]}
+              onPress={handleSubmitBatch}
+              disabled={loading}
+            >
+              <Text style={styles.actionButtonText}>{loading ? 'Submitting...' : `Submit Batch (${transactions.length} transactions)`}</Text>
+            </TouchableOpacity>
+            <View style={styles.secondaryActionsRow}>
+              <TouchableOpacity style={styles.actionButtonSecondary} onPress={handleSaveDraft}>
+                <Ionicons name="save" size={18} color="#312C51" />
+                <Text style={styles.actionButtonSecondaryText}>Save Draft</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionButtonSecondary} onPress={handlePrint}>
+                <Ionicons name="print" size={18} color="#312C51" />
+                <Text style={styles.actionButtonSecondaryText}>Print</Text>
               </TouchableOpacity>
             </View>
           </View>
-        </Modal>
+          <View style={{ height: 40 }} />
+        </ScrollView>
       </SafeAreaView>
+
+      {/* Date Picker Modal */}
+      <Modal visible={showDatePicker} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.datePickerModal}>
+            <Text style={styles.datePickerTitle}>Select Date</Text>
+            <View style={styles.calendarNav}>
+              <TouchableOpacity onPress={() => changeCalendarMonth(-1)}>
+                <Ionicons name="chevron-back" size={24} color="#312C51" />
+              </TouchableOpacity>
+              <Text style={styles.calendarMonthYear}>{MONTHS[calendarMonth - 1]} {calendarYear}</Text>
+              <TouchableOpacity onPress={() => changeCalendarMonth(1)}>
+                <Ionicons name="chevron-forward" size={24} color="#312C51" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.calendarGrid}>
+              {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => (
+                <Text key={d} style={styles.calendarDayHeader}>{d}</Text>
+              ))}
+              {renderCalendar().map((item, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={[
+                    styles.calendarDay,
+                    !item.empty && tempDate.day === item.day && styles.calendarDaySelected,
+                    !item.empty && tempDate.day === item.day && tempDate.month === calendarMonth && styles.calendarDaySelected,
+                  ]}
+                  onPress={() => item.empty ? null : setTempDate({...tempDate, day: item.day, month: calendarMonth, year: calendarYear})}
+                >
+                  <Text style={[styles.calendarDayText, item.empty && styles.calendarDayEmpty]}>
+                    {item.empty ? '' : item.day}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={styles.calendarActions}>
+              <TouchableOpacity style={styles.calendarCancelButton} onPress={() => setShowDatePicker(false)}>
+                <Text style={styles.calendarCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.calendarApplyButton} onPress={applyTempDate}>
+                <Text style={styles.calendarApplyText}>Apply</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f5' },
+  container: { flex: 1, backgroundColor: '#F5F5F5' },
   safeArea: { flex: 1 },
-  header: {
-    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16,
-    paddingVertical: 12, justifyContent: 'space-between',
-  },
-  headerCenter: { flex: 1, alignItems: 'center' },
-  headerSpacer: { width: 24 },
-  dateButton: { marginTop: 4 },
-  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#ffffff' },
-  headerDate: { fontSize: 12, color: '#ffffff', opacity: 0.8 },
-  content: { flex: 1, padding: 16 },
-  salesInfoContainer: { backgroundColor: '#ffffff', borderRadius: 8, padding: 16, marginBottom: 16 },
-  infoRow: { flexDirection: 'row', marginBottom: 12 },
-  infoGroup: { flex: 1, marginHorizontal: 4 },
-  infoLabel: { fontSize: 12, color: '#666', marginBottom: 4, fontWeight: '600' },
-  infoDropdown: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: '#f8f8f8', borderRadius: 6, padding: 12, borderWidth: 1, borderColor: '#e0e0e0',
-  },
-  infoInput: {
-    backgroundColor: '#f8f8f8', borderRadius: 6, padding: 12,
-    borderWidth: 1, borderColor: '#e0e0e0', fontSize: 14, color: '#333',
-  },
-  infoText: { fontSize: 14, color: '#333' },
-  batchActionsContainer: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 16 },
-  batchActionButton: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#ffffff',
-    borderRadius: 6, padding: 12, margin: 4, borderWidth: 1, borderColor: '#e0e0e0',
-  },
-  batchActionText: { fontSize: 12, color: '#312C51', marginLeft: 6 },
+  content: { flex: 1 },
   
-  // Per-Attendant Summary Card
-  summaryCard: {
-    backgroundColor: '#ffffff', borderRadius: 8, padding: 16, marginBottom: 16,
-    borderWidth: 1, borderColor: '#312C51',
-  },
+  // Header
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 16, paddingTop: 48 },
+  headerCenter: { flex: 1, alignItems: 'center' },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#ffffff' },
+  headerDate: { fontSize: 12, color: '#D3D3D3', marginTop: 4 },
+  headerSpacer: { width: 24 },
+  dateButton: { padding: 4 },
+  
+  // Sales Info
+  salesInfoContainer: { backgroundColor: '#fff', marginHorizontal: 12, marginTop: 12, borderRadius: 12, padding: 16, elevation: 2 },
+  infoRow: { flexDirection: 'row', gap: 12, marginBottom: 12 },
+  infoGroup: { flex: 1 },
+  infoLabel: { fontSize: 11, fontWeight: '600', color: '#888', marginBottom: 4, textTransform: 'uppercase' },
+  infoDropdown: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8F8F8', borderRadius: 8, padding: 10, borderWidth: 1, borderColor: '#E0E0E0' },
+  infoText: { fontSize: 14, color: '#312C51', fontWeight: '500' },
+  infoInput: { backgroundColor: '#F8F8F8', borderRadius: 8, padding: 10, borderWidth: 1, borderColor: '#E0E0E0', fontSize: 14, color: '#312C51' },
+  
+  // Batch Actions
+  batchActionsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginHorizontal: 12, marginTop: 12 },
+  batchActionButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 8, padding: 10, gap: 6, elevation: 1, flex: 1, minWidth: '45%' },
+  batchActionText: { fontSize: 11, color: '#312C51', fontWeight: '500' },
+  
+  // Summary Card
+  summaryCard: { backgroundColor: '#fff', marginHorizontal: 12, marginTop: 12, borderRadius: 12, padding: 16, elevation: 2 },
   summaryCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   summaryCardTitle: { fontSize: 16, fontWeight: 'bold', color: '#312C51' },
-  attendantTableHeader: {
-    flexDirection: 'row', backgroundColor: '#312C51', borderRadius: 6,
-    padding: 10, marginBottom: 4,
-  },
-  attendantTableHeaderText: { color: '#ffffff', fontWeight: 'bold', fontSize: 11 },
-  attendantTableRow: {
-    flexDirection: 'row', paddingVertical: 6, paddingHorizontal: 10,
-    borderBottomWidth: 1, borderBottomColor: '#f0f0f0',
-  },
-  attendantTableCell: { fontSize: 12, color: '#333' },
-  attendantDivider: { height: 1, backgroundColor: '#312C51', marginVertical: 8 },
-  attendantSubTitle: { fontSize: 13, fontWeight: 'bold', color: '#312C51', marginBottom: 8 },
-  attendantTip: {
-    fontSize: 11, color: '#666', fontStyle: 'italic', marginTop: 8, lineHeight: 16,
-  },
+  attendantTableHeader: { flexDirection: 'row', backgroundColor: '#F0F0F0', borderRadius: 8, padding: 8, marginBottom: 4 },
+  attendantTableHeaderText: { fontSize: 10, fontWeight: '700', color: '#666', textTransform: 'uppercase' },
+  attendantTableRow: { flexDirection: 'row', padding: 8, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
+  attendantTableCell: { fontSize: 12, color: '#312C51' },
+  attendantDivider: { height: 1, backgroundColor: '#E0E0E0', marginVertical: 8 },
+  attendantSubTitle: { fontSize: 12, fontWeight: '700', color: '#312C51', marginBottom: 8 },
+  attendantTip: { fontSize: 11, color: '#888', fontStyle: 'italic', marginTop: 8 },
   
-  // Attendant field
-  attendantField: { borderColor: '#312C51', borderWidth: 2 },
-  attendantDropdownContent: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  // Transactions
+  transactionsContainer: { paddingHorizontal: 12, marginTop: 12 },
+  transactionCard: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, elevation: 2 },
+  transactionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
+  transactionType: { fontSize: 12, fontWeight: 'bold', color: '#312C51', backgroundColor: '#E8E4F0', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 4 },
+  transactionActions: { flexDirection: 'row', gap: 8 },
+  actionButton: { padding: 4 },
   
-  transactionsContainer: { marginBottom: 16 },
-  transactionCard: {
-    backgroundColor: '#ffffff', borderRadius: 8, padding: 16,
-    marginBottom: 12, borderWidth: 1, borderColor: '#e0e0e0',
-  },
-  transactionHeader: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12,
-  },
-  transactionType: { fontSize: 14, fontWeight: 'bold', color: '#312C51' },
-  transactionActions: { flexDirection: 'row' },
-  actionButton: { padding: 6, marginLeft: 4 },
-  fieldRow: { flexDirection: 'row', marginBottom: 12 },
-  fieldGroup: { flex: 1, marginHorizontal: 4 },
-  fieldLabel: { fontSize: 12, color: '#666', marginBottom: 4, fontWeight: '600' },
-  fieldInput: {
-    backgroundColor: '#f8f8f8', borderRadius: 6, padding: 12,
-    borderWidth: 1, borderColor: '#e0e0e0', fontSize: 14, color: '#333',
-  },
-  fieldDropdown: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: '#f8f8f8', borderRadius: 6, padding: 12, borderWidth: 1, borderColor: '#e0e0e0',
-  },
-  fieldText: { fontSize: 14, color: '#333' },
-  transactionTotal: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingTop: 12, borderTopWidth: 1, borderTopColor: '#e0e0e0',
-  },
-  transactionTotalLabel: { fontSize: 14, fontWeight: 'bold', color: '#666' },
-  transactionTotalAmount: { fontSize: 16, fontWeight: 'bold', color: '#333' },
-  addTransactionSection: { marginTop: 16 },
-  addTransactionButton: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#ffffff',
-    borderRadius: 8, padding: 16, marginVertical: 4,
-    borderWidth: 2, borderColor: '#312C51', borderStyle: 'dashed',
-  },
-  addTransactionText: { fontSize: 16, color: '#312C51', fontWeight: '600', marginLeft: 8 },
-  summaryContainer: { backgroundColor: '#ffffff', borderRadius: 8, padding: 16, marginBottom: 16 },
+  // Fields
+  fieldRow: { flexDirection: 'row', gap: 12, marginBottom: 12 },
+  fieldGroup: { flex: 1 },
+  fieldLabel: { fontSize: 11, fontWeight: '600', color: '#888', marginBottom: 4, textTransform: 'uppercase' },
+  fieldInput: { backgroundColor: '#F8F8F8', borderRadius: 8, padding: 10, borderWidth: 1, borderColor: '#E0E0E0', fontSize: 14, color: '#312C51' },
+  fieldDropdown: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8F8F8', borderRadius: 8, padding: 10, borderWidth: 1, borderColor: '#E0E0E0' },
+  fieldText: { fontSize: 14, color: '#312C51', fontWeight: '500' },
+  attendantField: { borderColor: '#312C51' },
+  attendantDropdownContent: { flexDirection: 'row', alignItems: 'center' },
+  
+  // Transaction Total
+  transactionTotal: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F0F0F0' },
+  transactionTotalLabel: { fontSize: 12, fontWeight: '600', color: '#888', marginRight: 12 },
+  transactionTotalAmount: { fontSize: 16, fontWeight: 'bold', color: '#312C51' },
+  
+  // Add Transaction
+  addTransactionSection: { marginBottom: 12 },
+  addTransactionButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', borderRadius: 12, padding: 16, borderWidth: 2, borderColor: '#312C51', borderStyle: 'dashed', gap: 8 },
+  addTransactionText: { fontSize: 14, fontWeight: '600', color: '#312C51' },
+  
+  // Summary
+  summaryContainer: { backgroundColor: '#fff', marginHorizontal: 12, marginTop: 12, borderRadius: 12, padding: 16, elevation: 2 },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   summaryLabel: { fontSize: 14, color: '#666' },
   summaryValue: { alignItems: 'flex-end' },
-  summaryAmount: { fontSize: 14, fontWeight: 'bold', color: '#333' },
-  summaryAmountUSD: { fontSize: 12, color: '#666' },
-  totalRow: { borderTopWidth: 1, borderTopColor: '#e0e0e0', paddingTop: 8, marginTop: 8 },
-  totalLabel: { fontSize: 16, fontWeight: 'bold', color: '#333' },
-  totalAmount: { fontSize: 18, fontWeight: 'bold', color: '#333' },
-  totalAmountUSD: { fontSize: 14, color: '#666' },
-  exchangeRateText: { fontSize: 12, color: '#999', textAlign: 'center', marginTop: 12 },
+  summaryAmount: { fontSize: 14, fontWeight: '600', color: '#312C51' },
+  summaryAmountUSD: { fontSize: 11, color: '#888' },
+  totalRow: { borderTopWidth: 1, borderTopColor: '#E0E0E0', paddingTop: 12 },
+  totalLabel: { fontSize: 16, fontWeight: 'bold', color: '#312C51' },
+  totalAmount: { fontSize: 18, fontWeight: 'bold', color: '#312C51' },
+  totalAmountUSD: { fontSize: 12, color: '#888' },
   
-  // Reconciliation Card
-  reconciliationCard: {
-    backgroundColor: '#f0fff0', borderRadius: 8, padding: 16, marginBottom: 16,
-    borderWidth: 1, borderColor: '#4CAF50',
-  },
-  reconciliationHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  reconciliationTitle: { fontSize: 14, fontWeight: 'bold', color: '#2E7D32' },
-  reconciliationText: { fontSize: 12, color: '#555', lineHeight: 18 },
+  // Action Buttons
+  actionButtonsContainer: { paddingHorizontal: 12, marginTop: 16 },
+  actionButtonPrimary: { backgroundColor: '#312C51', borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 12 },
+  actionButtonDisabled: { opacity: 0.6 },
+  actionButtonText: { fontSize: 16, fontWeight: 'bold', color: '#fff' },
+  secondaryActionsRow: { flexDirection: 'row', gap: 12 },
+  actionButtonSecondary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', borderRadius: 12, padding: 12, flex: 1, gap: 8, elevation: 1, borderWidth: 1, borderColor: '#E0E0E0' },
+  actionButtonSecondaryText: { fontSize: 14, fontWeight: '600', color: '#312C51' },
   
-  footer: {
-    flexDirection: 'row', padding: 16, backgroundColor: '#ffffff',
-    borderTopWidth: 1, borderTopColor: '#e0e0e0',
-  },
-  saveDraftButton: {
-    flex: 1, backgroundColor: '#ffffff', borderRadius: 8, padding: 16,
-    marginRight: 8, borderWidth: 1, borderColor: '#312C51', alignItems: 'center',
-  },
-  saveDraftText: { fontSize: 14, color: '#312C51', fontWeight: '600' },
-  submitButton: {
-    flex: 1, backgroundColor: '#312C51', borderRadius: 8, padding: 16,
-    marginHorizontal: 4, alignItems: 'center',
-  },
-  submitText: { fontSize: 14, color: '#ffffff', fontWeight: '600' },
-  printButton: {
-    flex: 1, backgroundColor: '#312C51', borderRadius: 8, padding: 16,
-    marginLeft: 8, alignItems: 'center',
-  },
-  printText: { fontSize: 14, color: '#ffffff', fontWeight: '600' },
+  // Date Picker Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-  datePickerModal: { backgroundColor: '#ffffff', borderRadius: 16, padding: 20, width: '90%', maxWidth: 360 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  modalTitle: { fontSize: 18, fontWeight: 'bold', color: '#333' },
-  calendarHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
-  calendarMonthYear: { fontSize: 16, fontWeight: 'bold', color: '#312C51' },
-  calendarWeekDays: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 8 },
-  weekDayCell: { width: 40, alignItems: 'center' },
-  weekDayText: { fontSize: 14, fontWeight: 'bold', color: '#666' },
-  calendarDayCell: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  selectedDayCell: { backgroundColor: '#312C51', borderRadius: 20 },
-  calendarDayText: { fontSize: 14, color: '#333' },
-  selectedDayText: { color: '#ffffff', fontWeight: 'bold' },
-  applyDateButton: {
-    backgroundColor: '#312C51', borderRadius: 8, padding: 14,
-    alignItems: 'center', marginTop: 16,
-  },
-  applyDateText: { fontSize: 16, color: '#ffffff', fontWeight: '600' },
+  datePickerModal: { backgroundColor: '#fff', borderRadius: 16, padding: 20, width: '85%', maxWidth: 340 },
+  datePickerTitle: { fontSize: 18, fontWeight: 'bold', color: '#312C51', textAlign: 'center', marginBottom: 16 },
+  calendarNav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  calendarMonthYear: { fontSize: 16, fontWeight: '600', color: '#312C51' },
+  calendarGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  calendarDayHeader: { width: '14.28%', textAlign: 'center', fontSize: 11, fontWeight: '600', color: '#888', paddingVertical: 4 },
+  calendarDay: { width: '14.28%', alignItems: 'center', padding: 8 },
+  calendarDaySelected: { backgroundColor: '#312C51', borderRadius: 8 },
+  calendarDayText: { fontSize: 14, color: '#312C51' },
+  calendarDayEmpty: { color: 'transparent' },
+  calendarActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12, marginTop: 16, borderTopWidth: 1, borderTopColor: '#F0F0F0', paddingTop: 16 },
+  calendarCancelButton: { padding: 8 },
+  calendarCancelText: { fontSize: 14, color: '#888', fontWeight: '600' },
+  calendarApplyButton: { backgroundColor: '#312C51', paddingHorizontal: 24, paddingVertical: 8, borderRadius: 8 },
+  calendarApplyText: { fontSize: 14, color: '#fff', fontWeight: '600' },
 });

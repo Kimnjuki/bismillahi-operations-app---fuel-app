@@ -16,7 +16,6 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../config/supabase';
 import { formatCurrency } from '../constants/currency';
-import { EXPENSE_CATEGORIES } from '../constants/expenseCategories';
 
 const { width } = Dimensions.get('window');
 

@@ -17,7 +17,8 @@ import { useAuth } from '../context/AuthContext';
 import { supabase, ExchangeRate } from '../config/supabase';
 import { FundTransfer, Currency } from '../types';
 import { fundTransferService } from '../services/fundTransferService';
-import { internalAccountService, InternalAccount, Station } from '../services/internalAccountService';
+import { internalAccountService } from '../services/internalAccountService';
+import { InternalAccount, Station } from '../types';
 
 export default function FundTransferScreen({ navigation }: any) {
   const { appUser } = useAuth();

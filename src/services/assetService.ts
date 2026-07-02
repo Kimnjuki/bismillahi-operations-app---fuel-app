@@ -405,35 +405,41 @@ class AssetService {
   // Utility methods for common asset operations
   async optimizeImageForReceipt(imageUri: string | null): Promise<string> {
     if (!imageUri) return 'default';
-    return this.processAndSaveAsset(imageUri!, 'receipt', {
+    const metadata = await this.processAndSaveAsset(imageUri, 'receipt', {
       maxWidth: 1200,
       maxHeight: 1600,
       quality: 0.9,
       format: 'jpeg',
       compression: 0.8,
-    }).then(metadata => this.getAssetUri(metadata.id) || imageUri!);
+    });
+    const assetUri = await this.getAssetUri(metadata.id);
+    return (assetUri ?? imageUri) as string;
   }
 
   async optimizeImageForProfile(imageUri: string | null): Promise<string> {
     if (!imageUri) return 'default';
-    return this.processAndSaveAsset(imageUri!, 'profile', {
+    const metadata = await this.processAndSaveAsset(imageUri, 'profile', {
       maxWidth: 400,
       maxHeight: 400,
       quality: 0.8,
       format: 'jpeg',
       compression: 0.7,
-    }).then(metadata => this.getAssetUri(metadata.id) || imageUri!);
+    });
+    const assetUri = await this.getAssetUri(metadata.id);
+    return (assetUri ?? imageUri) as string;
   }
 
   async optimizeImageForDocument(imageUri: string | null): Promise<string> {
     if (!imageUri) return 'default';
-    return this.processAndSaveAsset(imageUri!, 'document', {
+    const metadata = await this.processAndSaveAsset(imageUri, 'document', {
       maxWidth: 1920,
       maxHeight: 1080,
       quality: 0.85,
       format: 'jpeg',
       compression: 0.8,
-    }).then(metadata => this.getAssetUri(metadata.id) || imageUri!);
+    });
+    const assetUri = await this.getAssetUri(metadata.id);
+    return (assetUri ?? imageUri) as string;
   }
 }
 

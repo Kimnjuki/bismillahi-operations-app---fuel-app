@@ -1,0 +1,1865 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bismillahi Operations — Complete User Flow Documentation</title>
+<style>
+  :root {
+    --primary: #FFD700;
+    --primary-dark: #DAA520;
+    --bg-dark: #1a1a2e;
+    --bg-card: #16213e;
+    --bg-card-alt: #0f3460;
+    --text-light: #e0e0e0;
+    --text-white: #ffffff;
+    --accent-green: #2ecc71;
+    --accent-blue: #3498db;
+    --accent-red: #e74c3c;
+    --accent-purple: #9b59b6;
+    --accent-orange: #f39c12;
+    --accent-teal: #1abc9c;
+    --accent-pink: #e91e63;
+    --border-color: #2a2a4a;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: var(--bg-dark);
+    color: var(--text-light);
+    line-height: 1.6;
+  }
+
+  .hero {
+    background: linear-gradient(135deg, var(--bg-dark), var(--bg-card-alt));
+    padding: 60px 40px;
+    text-align: center;
+    border-bottom: 3px solid var(--primary);
+  }
+
+  .hero h1 {
+    font-size: 2.8em;
+    color: var(--primary);
+    margin-bottom: 10px;
+    letter-spacing: 2px;
+  }
+
+  .hero .subtitle {
+    font-size: 1.3em;
+    color: var(--text-light);
+    margin-bottom: 20px;
+  }
+
+  .hero .meta {
+    font-size: 0.95em;
+    color: #888;
+  }
+
+  .toc {
+    background: var(--bg-card);
+    max-width: 1200px;
+    margin: 40px auto;
+    padding: 30px 40px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+  }
+
+  .toc h2 {
+    color: var(--primary);
+    margin-bottom: 20px;
+    font-size: 1.5em;
+  }
+
+  .toc-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 10px;
+  }
+
+  .toc a {
+    color: var(--accent-blue);
+    text-decoration: none;
+    padding: 8px 12px;
+    border-radius: 6px;
+    transition: background 0.2s;
+    display: block;
+  }
+
+  .toc a:hover {
+    background: var(--bg-card-alt);
+  }
+
+  .toc a .num {
+    color: var(--primary);
+    font-weight: bold;
+    margin-right: 8px;
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px 40px;
+  }
+
+  .section {
+    margin: 50px 0;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 25px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid var(--border-color);
+  }
+
+  .section-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    flex-shrink: 0;
+  }
+
+  .section-header h2 {
+    font-size: 1.8em;
+    color: var(--text-white);
+  }
+
+  .section-header .section-desc {
+    font-size: 0.95em;
+    color: #aaa;
+    margin-top: 4px;
+  }
+
+  /* Flow Diagram Styles */
+  .flow-container {
+    background: var(--bg-card);
+    border-radius: 12px;
+    padding: 30px;
+    border: 1px solid var(--border-color);
+    margin: 20px 0;
+    overflow-x: auto;
+  }
+
+  .flow-title {
+    color: var(--primary);
+    font-size: 1.15em;
+    font-weight: 600;
+    margin-bottom: 20px;
+  }
+
+  .flow {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-wrap: nowrap;
+    min-width: max-content;
+    padding: 10px 0;
+  }
+
+  .flow-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 140px;
+    max-width: 180px;
+    text-align: center;
+  }
+
+  .flow-step .node {
+    padding: 12px 18px;
+    border-radius: 10px;
+    font-size: 0.85em;
+    font-weight: 600;
+    border: 2px solid;
+    min-width: 130px;
+    position: relative;
+  }
+
+  .flow-step .node.auth { border-color: var(--accent-red); background: rgba(231,76,60,0.15); color: var(--accent-red); }
+  .flow-step .node.screen { border-color: var(--accent-blue); background: rgba(52,152,219,0.15); color: var(--accent-blue); }
+  .flow-step .node.action { border-color: var(--accent-green); background: rgba(46,204,113,0.15); color: var(--accent-green); }
+  .flow-step .node.decision { border-color: var(--accent-orange); background: rgba(243,156,18,0.15); color: var(--accent-orange); transform: rotate(0deg); border-style: dashed; }
+  .flow-step .node.feature { border-color: var(--accent-purple); background: rgba(155,89,182,0.15); color: var(--accent-purple); }
+  .flow-step .node.end { border-color: var(--primary); background: rgba(255,215,0,0.15); color: var(--primary); }
+  .flow-step .node.danger { border-color: var(--accent-red); background: rgba(231,76,60,0.25); color: #ff6b6b; }
+
+  .flow-step .label {
+    font-size: 0.75em;
+    color: #888;
+    margin-top: 6px;
+  }
+
+  .flow-arrow {
+    display: flex;
+    align-items: center;
+    color: #555;
+    font-size: 1.5em;
+    padding: 0 4px;
+    flex-shrink: 0;
+  }
+
+  .flow-arrow.down {
+    transform: rotate(90deg);
+  }
+
+  /* Vertical Flow */
+  .vflow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    padding: 10px 0;
+  }
+
+  .vflow .flow-step {
+    min-width: auto;
+    max-width: 300px;
+  }
+
+  .vflow .flow-arrow {
+    transform: rotate(90deg);
+  }
+
+  /* Detail Cards */
+  .detail-card {
+    background: var(--bg-card);
+    border-radius: 10px;
+    padding: 20px 25px;
+    border: 1px solid var(--border-color);
+    margin: 15px 0;
+  }
+
+  .detail-card h4 {
+    color: var(--text-white);
+    margin-bottom: 12px;
+    font-size: 1.1em;
+  }
+
+  .detail-card ul {
+    list-style: none;
+    padding: 0;
+  }
+
+  .detail-card li {
+    padding: 6px 0;
+    padding-left: 20px;
+    position: relative;
+    color: var(--text-light);
+    font-size: 0.92em;
+  }
+
+  .detail-card li::before {
+    content: '▸';
+    position: absolute;
+    left: 0;
+    color: var(--primary);
+  }
+
+  .detail-card .role-tag {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 0.78em;
+    font-weight: 600;
+    margin: 2px;
+  }
+
+  .role-admin { background: rgba(231,76,60,0.2); color: var(--accent-red); border: 1px solid var(--accent-red); }
+  .role-manager { background: rgba(52,152,219,0.2); color: var(--accent-blue); border: 1px solid var(--accent-blue); }
+  .role-cashier { background: rgba(46,204,113,0.2); color: var(--accent-green); border: 1px solid var(--accent-green); }
+  .role-viewer { background: rgba(155,89,182,0.2); color: var(--accent-purple); border: 1px solid var(--accent-purple); }
+
+  /* Permission Matrix */
+  .matrix-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 15px 0;
+    font-size: 0.88em;
+  }
+
+  .matrix-table th {
+    background: var(--bg-card-alt);
+    color: var(--primary);
+    padding: 12px 15px;
+    text-align: left;
+    border: 1px solid var(--border-color);
+  }
+
+  .matrix-table td {
+    padding: 10px 15px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-card);
+  }
+
+  .matrix-table tr:hover td {
+    background: var(--bg-card-alt);
+  }
+
+  .check { color: var(--accent-green); font-weight: bold; }
+  .cross { color: var(--accent-red); }
+  .partial { color: var(--accent-orange); }
+
+  /* Screen Description */
+  .screen-card {
+    background: var(--bg-card);
+    border-radius: 12px;
+    padding: 25px;
+    border-left: 4px solid var(--primary);
+    margin: 20px 0;
+  }
+
+  .screen-card h3 {
+    color: var(--text-white);
+    margin-bottom: 5px;
+  }
+
+  .screen-card .screen-route {
+    font-family: monospace;
+    color: var(--accent-teal);
+    font-size: 0.85em;
+    margin-bottom: 12px;
+  }
+
+  .screen-card .screen-desc {
+    color: #bbb;
+    margin-bottom: 15px;
+  }
+
+  .elements-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
+  }
+
+  .element-box {
+    background: var(--bg-card-alt);
+    border-radius: 8px;
+    padding: 12px 15px;
+    font-size: 0.88em;
+  }
+
+  .element-box .elem-label {
+    color: var(--primary);
+    font-weight: 600;
+    font-size: 0.8em;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+  }
+
+  .legend {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin: 20px 0;
+    padding: 15px 20px;
+    background: var(--bg-card);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85em;
+  }
+
+  .legend-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    border: 2px solid;
+  }
+
+  .nav-path {
+    background: var(--bg-card);
+    border-radius: 10px;
+    padding: 20px;
+    margin: 15px 0;
+    border: 1px solid var(--border-color);
+  }
+
+  .nav-path h4 {
+    color: var(--accent-teal);
+    margin-bottom: 10px;
+  }
+
+  .breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-size: 0.9em;
+  }
+
+  .breadcrumb .crumb {
+    background: var(--bg-card-alt);
+    padding: 4px 12px;
+    border-radius: 6px;
+    color: var(--text-light);
+  }
+
+  .breadcrumb .crumb.current {
+    background: var(--primary);
+    color: var(--bg-dark);
+    font-weight: 600;
+  }
+
+  .breadcrumb .sep {
+    color: #555;
+  }
+
+  .tip-box {
+    background: rgba(46,204,113,0.1);
+    border: 1px solid rgba(46,204,113,0.3);
+    border-radius: 8px;
+    padding: 15px 20px;
+    margin: 15px 0;
+    font-size: 0.9em;
+  }
+
+  .tip-box .tip-label {
+    color: var(--accent-green);
+    font-weight: 700;
+    margin-bottom: 5px;
+  }
+
+  .warn-box {
+    background: rgba(231,76,60,0.1);
+    border: 1px solid rgba(231,76,60,0.3);
+    border-radius: 8px;
+    padding: 15px 20px;
+    margin: 15px 0;
+    font-size: 0.9em;
+  }
+
+  .warn-box .warn-label {
+    color: var(--accent-red);
+    font-weight: 700;
+    margin-bottom: 5px;
+  }
+
+  .info-box {
+    background: rgba(52,152,219,0.1);
+    border: 1px solid rgba(52,152,219,0.3);
+    border-radius: 8px;
+    padding: 15px 20px;
+    margin: 15px 0;
+    font-size: 0.9em;
+  }
+
+  .info-box .info-label {
+    color: var(--accent-blue);
+    font-weight: 700;
+    margin-bottom: 5px;
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 15px;
+    margin: 20px 0;
+  }
+
+  .stat-card {
+    background: var(--bg-card);
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+    border: 1px solid var(--border-color);
+  }
+
+  .stat-card .stat-num {
+    font-size: 2em;
+    font-weight: 700;
+    color: var(--primary);
+  }
+
+  .stat-card .stat-label {
+    font-size: 0.85em;
+    color: #888;
+    margin-top: 5px;
+  }
+
+  @media print {
+    body { background: white; color: #333; }
+    .hero { background: #f0f0f0; }
+    .section-icon, .node, .legend-dot { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  }
+
+  @media (max-width: 768px) {
+    .container { padding: 15px; }
+    .hero { padding: 30px 20px; }
+    .hero h1 { font-size: 1.8em; }
+    .flow { flex-direction: column; }
+    .flow-arrow { transform: rotate(90deg); }
+    .toc-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- HERO -->
+<div class="hero">
+  <h1>⛽ BISMILLAHI OPERATIONS</h1>
+  <div class="subtitle">Complete User Flow Documentation</div>
+  <div class="meta">
+    Petrol Station Management System &nbsp;|&nbsp; Version 1.0 &nbsp;|&nbsp; Generated: 13 June 2026<br>
+    Tech Stack: Expo SDK 54 · React Native · TypeScript · Supabase · React Navigation · React Native Paper
+  </div>
+</div>
+
+<!-- TABLE OF CONTENTS -->
+<div class="toc">
+  <h2>📋 Table of Contents</h2>
+  <div class="toc-grid">
+    <a href="#overview"><span class="num">01</span> System Overview & Statistics</a>
+    <a href="#navigation"><span class="num">02</span> Navigation Architecture</a>
+    <a href="#auth"><span class="num">03</span> Authentication & Onboarding Flow</a>
+    <a href="#dashboard"><span class="num">04</span> Dashboard — Central Hub</a>
+    <a href="#sales"><span class="num">05</span> Sales Management Flow</a>
+    <a href="#stock"><span class="num">06</span> Stock & Inventory Flow</a>
+    <a href="#expenses"><span class="num">07</span> Expense Management Flow</a>
+    <a href="#transfers"><span class="num">08</span> Fund Transfers Flow</a>
+    <a href="#exchange"><span class="num">09</span> Exchange Rate Management Flow</a>
+    <a href="#accounts"><span class="num">10</span> Accounts Receivable & Payable Flow</a>
+    <a href="#reports"><span class="num">11</span> Reports & Analytics Flow</a>
+    <a href="#notifications"><span class="num">12</span> Notifications Flow</a>
+    <a href="#settings"><span class="num">13</span> Station Settings & Profile Flow</a>
+    <a href="#permissions"><span class="num">14</span> Role-Based Permissions Matrix</a>
+    <a href="#lifecycle"><span class="num">15</span> Complete App Lifecycle</a>
+  </div>
+</div>
+
+<div class="container">
+
+<!-- SECTION 1: OVERVIEW -->
+<div class="section" id="overview">
+  <div class="section-header">
+    <div class="section-icon" style="background:rgba(255,215,0,0.15); border:2px solid var(--primary);">📊</div>
+    <div>
+      <h2>1. System Overview & Statistics</h2>
+      <div class="section-desc">High-level view of the application scope</div>
+    </div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-num">30+</div>
+      <div class="stat-label">Screens</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">14</div>
+      <div class="stat-label">Reusable Components</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">12</div>
+      <div class="stat-label">Service Modules</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">4</div>
+      <div class="stat-label">User Roles</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">15+</div>
+      <div class="stat-label">Database Tables</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">8</div>
+      <div class="stat-label">Core Modules</div>
+    </div>
+  </div>
+
+  <div class="detail-card">
+    <h4>Core Modules</h4>
+    <ul>
+      <li><strong>Authentication</strong> — PIN-based login, role-based access, password recovery</li>
+      <li><strong>Sales Management</strong> — Pump readings, drum sales, dippings, multi-fuel support</li>
+      <li><strong>Stock & Inventory</strong> — Fuel stock levels, dip readings, variance tracking, fuel delivery tracking</li>
+      <li><strong>Expense Management</strong> — Expense entry, categories, history, analytics</li>
+      <li><strong>Financial Operations</strong> — Fund transfers (inter-account), exchange rate management</li>
+      <li><strong>Accounts</strong> — Accounts receivable & payable tracking with aging analysis</li>
+      <li><strong>Reports & Analytics</strong> — Sales reports, expense reports, daily consolidated reports, fuel analytics</li>
+      <li><strong>Administration</strong> — User management, station settings, notifications, security audit</li>
+    </ul>
+  </div>
+</div>
+
+<!-- SECTION 2: NAVIGATION ARCHITECTURE -->
+<div class="section" id="navigation">
+  <div class="section-header">
+    <div class="section-icon" style="background:rgba(52,152,219,0.15); border:2px solid var(--accent-blue);">🧭</div>
+    <div>
+      <h2>2. Navigation Architecture</h2>
+      <div class="section-desc">App structure and navigation hierarchy</div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="border-color:var(--accent-red); background:rgba(231,76,60,0.15);"></div> Auth Screen</div>
+    <div class="legend-item"><div class="legend-dot" style="border-color:var(--accent-blue); background:rgba(52,152,219,0.15);"></div> App Screen</div>
+    <div class="legend-item"><div class="legend-dot" style="border-color:var(--accent-green); background:rgba(46,204,113,0.15);"></div> Action/Modal</div>
+    <div class="legend-item"><div class="legend-dot" style="border-color:var(--accent-orange); background:rgba(243,156,18,0.15);"></div> Decision Point</div>
+    <div class="legend-item"><div class="legend-dot" style="border-color:var(--accent-purple); background:rgba(155,89,182,0.15);"></div> Feature Module</div>
+  </div>
+
+  <div class="flow-container">
+    <div class="flow-title">Provider Hierarchy</div>
+    <div style="font-family:monospace; font-size:0.88em; line-height:2; color:var(--text-light);">
+      <div style="padding-left:0;">📦 <span style="color:var(--accent-red);">ErrorBoundary</span></div>
+      <div style="padding-left:20px;">└─ 📦 SafeAreaProvider</div>
+      <div style="padding-left:40px;">&nbsp;&nbsp;└─ 📦 GestureHandlerRootView</div>
+      <div style="padding-left:60px;">&nbsp;&nbsp;&nbsp;&nbsp;└─ 📦 QueryClientProvider <span style="color:#666;">(React Query)</span></div>
+      <div style="padding-left:80px;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└─ 📦 AuthProvider <span style="color:#666;">(src/context/AuthContext)</span></div>
+      <div style="padding-left:100px;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└─ 🧭 NavigationContainer</div>
+      <div style="padding-left:120px;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└─ 📚 Stack.Navigator <span style="color:#666;">(flat — all screens)</span></div>
+    </div>
+  </div>
+
+  <div class="detail-card">
+    <h4>Key Architecture Decisions</h4>
+    <ul>
+      <li><strong>Single Flat Stack</strong> — All 30+ screens (auth + app) are in one NativeStackNavigator. No bottom tabs or drawer.</li>
+      <li><strong>Auth Guard</strong> — Conditional initialRouteName: if authenticated → Dashboard, else → PinLogin</li>
+      <li><strong>Token Management</strong> — Supabase session tokens stored in Expo SecureStore for persistence</li>
+      <li><strong>Role-Based Rendering</strong> — Each screen checks user role to conditionally show/hide features</li>
+      <li><strong>Screen Mode</strong> — Screens use a <code>mode</code> prop ('dashboard' | 'add' | 'edit' | 'history') for multi-purpose rendering</li>
+    </ul>
+  </div>
+
+  <div class="flow-container">
+    <div class="flow-title">Top-Level Navigation Flow</div>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="node auth">🚀 Splash</div>
+        <div class="label">App Launch</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node screen">📖 Onboarding</div>
+        <div class="label">First-time only</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node screen">👋 Welcome</div>
+        <div class="label">Role display</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node decision">🔐 Auth Check</div>
+        <div class="label">Is logged in?</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node auth">🔢 PIN Login</div>
+        <div class="label">6-digit PIN</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node end">🏠 Dashboard</div>
+        <div class="label">Central hub</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow-container">
+    <div class="flow-title">Full Screen Map (30+ Screens)</div>
+    <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px;">
+      <div class="element-box"><div class="elem-label">Auth Flow</div>SplashScreen → WelcomeOnboardingScreen → WelcomeScreen → PinLoginScreen → SignupScreen → ForgotPasswordScreen → ResetPasswordScreen</div>
+      <div class="element-box"><div class="elem-label">Core Hub</div>DashboardScreen (main menu grid with navigation tiles)</div>
+      <div class="element-box"><div class="elem-label">Sales Module</div>SalesEntryScreen → PumpSaleEntry / DrumSaleEntry / DailySalesHistory / SalesAnalytics</div>
+      <div class="element-box"><div class="elem-label">Stock Module</div>StockManagementScreen → StockDashboard / FuelDeliveryTracking / FuelTransitTracking</div>
+      <div class="element-box"><div class="elem-label">Expenses Module</div>ExpenseEntryScreen → ExpenseOnboarding / ExpenseHistory / ExpenseAnalytics</div>
+      <div class="element-box"><div class="elem-label">Finance Module</div>FundTransferScreen → NewTransferScreen / TransferHistory / ExchangeRateScreen</div>
+      <div class="element-box"><div class="elem-label">Accounts Module</div>AccountsScreen → AccountsReceivable / AccountsPayable / AccountTransactions</div>
+      <div class="element-box"><div class="elem-label">Reports Module</div>ReportsScreen → SalesReport / ExpenseReport / DailyConsolidatedReport / GenerateReport</div>
+      <div class="element-box"><div class="elem-label">Settings Module</div>StationSettingsScreen → Profile / UserManagement / StationConfig / SecurityEvents</div>
+      <div class="element-box"><div class="elem-label">Notifications</div>NotificationsScreen (center with read/unread/filter)</div>
+      <div class="element-box"><div class="elem-label">Pump Management</div>PumpAndDippingManagementScreen / PumpManagementAndReadingScreen</div>
+      <div class="element-box"><div class="elem-label">Accounts Detail</div>AccountDetailScreen / NewAccountEntryScreen</div>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 3: AUTH & ONBOARDING FLOW -->
+<div class="section" id="auth">
+  <div class="section-header">
+    <div class="section-icon" style="background:rgba(231,76,60,0.15); border:2px solid var(--accent-red);">🔐</div>
+    <div>
+      <h2>3. Authentication & Onboarding Flow</h2>
+      <div class="section-desc">First-time user experience and login process</div>
+    </div>
+  </div>
+
+  <div class="flow-container">
+    <div class="flow-title">Complete Auth Flow</div>
+    <div class="vflow">
+      <div class="flow-step">
+        <div class="node screen">🚀 SplashScreen</div>
+        <div class="label">Logo animation + tagline (3 seconds auto)</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node feature">📖 WelcomeOnboardingScreen</div>
+        <div class="label">4-page walkthrough (first-time only)<br>Skip | Previous | Next buttons</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node screen">👋 WelcomeScreen</div>
+        <div class="label">Role display + permissions list<br>Continue button</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node decision">🔍 Auth Check</div>
+        <div class="label">Existing session?<br>Supabase token in SecureStore</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node auth">🔢 PinLoginScreen</div>
+        <div class="label">6-digit PIN entry<br>Forgot Password link<br>Create Account link</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node end">🏠 DashboardScreen</div>
+        <div class="label">Main application hub</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="screen-card">
+    <h3>🚀 SplashScreen</h3>
+    <div class="screen-route">Route: SplashScreen</div>
+    <div class="screen-desc">Animated splash screen displayed on app launch. Shows the Bismillahi Operations logo, app name, and tagline. Auto-advances after 3 seconds.</div>
+    <div class="elements-grid">
+      <div class="element-box"><div class="elem-label">Visual</div>Animated logo icon, app name "BISMILLAHI OPERATIONS", tagline, pagination dots</div>
+      <div class="element-box"><div class="elem-label">Interaction</div>None — fully automatic</div>
+      <div class="element-box"><div class="elem-label">Navigation</div>→ WelcomeOnboarding (auto after 3s)</div>
+    </div>
+  </div>
+
+  <div class="screen-card">
+    <h3>📖 WelcomeOnboardingScreen</h3>
+    <div class="screen-route">Route: WelcomeOnboarding</div>
+    <div class="screen-desc">First-time user onboarding with 4 swipeable pages covering Sales Management, Inventory Control, Financial Reporting, and a final "Get Started" page.</div>
+    <div class="elements-grid">
+      <div class="element-box"><div class="elem-label">Pages</div>Page 1: Sales Management — Page 2: Inventory Control — Page 3: Financial Reporting — Page 4: Ready to Start</div>
+      <div class="element-box"><div class="elem-label">Controls</div>Skip button (top-right), Previous/Next buttons, pagination dots, swipe gestures</div>
+      <div class="element-box"><div class="elem-label">Visual</div>Gradient backgrounds, emoji icons, feature checklists per page</div>
+      <div class="element-box"><div class="elem-label">Navigation</div>→ WelcomeScreen (on skip or completion)</div>
+    </div>
+  </div>
+
+  <div class="screen-card">
+    <h3>👋 WelcomeScreen</h3>
+    <div class="screen-route">Route: Welcome</div>
+    <div class="screen-desc">Post-login welcome that displays the user's name, assigned role badge, and list of permissions. Shows contextual action based on authentication state.</div>
+    <div class="elements-grid">
+      <div class="element-box"><div class="elem-label">Display</div>User name, role badge (Admin/Manager/Cashier/Viewer), permissions list</div>
+      <div class="element-box"><div class="elem-label">Actions</div>Continue to Dashboard / Login / Sign Up (context-dependent)</div>
+      <div class="element-box"><div class="elem-label">Navigation</div>→ PinLoginScreen or DashboardScreen or SignupScreen</div>
+    </div>
+  </div>
+
+  <div class="screen-card">
+    <h3>🔢 PinLoginScreen</h3>
+    <div class="screen-route">Route: PinLogin</div>
+    <div class="screen-desc">Primary authentication screen using 6-digit PIN. Validates against Supabase users table. Includes biometric fallback and account recovery options.</div>
+    <div class="elements-grid">
+      <div class="element-box"><div class="elem-label">Input</div>6-digit PIN entry with visual feedback per digit</div>
+      <div class="element-box"><div class="elem-label">Features</div>Biometric auth (FaceID/Fingerprint), PIN validation, loading state</div>
+      <div class="element-box"><div class="elem-label">Links</div>"Forgot Password?" → ResetPasswordScreen, "Create Account" → SignupScreen</div>
+      <div class="element-box"><div class="elem-label">Security</div>Rate limiting, lockout after failed attempts, secure token storage</div>
+    </div>
+  </div>
+
+  <div class="nav-path">
+    <h4>Sub-flow: Account Recovery</h4>
+    <div class="breadcrumb">
+      <span class="crumb">PinLoginScreen</span>
+      <span class="sep">→</span>
+      <span class="crumb">ForgotPasswordScreen</span>
+      <span class="sep">→</span>
+      <span class="crumb">ResetPasswordScreen</span>
+      <span class="sep">→</span>
+      <span class="crumb current">PinLoginScreen</span>
+    </div>
+    <div style="margin-top:10px; font-size:0.9em; color:#888;">
+      User enters email → receives reset link → creates new password → redirected back to login
+    </div>
+  </div>
+
+  <div class="nav-path">
+    <h4>Sub-flow: New Account Registration</h4>
+    <div class="breadcrumb">
+      <span class="crumb">PinLoginScreen</span>
+      <span class="sep">→</span>
+      <span class="crumb">SignupScreen</span>
+      <span class="sep">→</span>
+      <span class="crumb">WelcomeScreen</span>
+      <span class="sep">→</span>
+      <span class="crumb current">DashboardScreen</span>
+    </div>
+    <div style="margin-top:10px; font-size:0.9em; color:#888;">
+      User fills registration form (name, email, password, PIN) → account created → role displayed → enters dashboard
+    </div>
+  </div>
+
+  <div class="tip-box">
+    <div class="tip-label">💡 UX Note</div>
+    Onboarding only shows on first launch (tracked via AsyncStorage flag). Returning users skip directly to PIN login. Session persistence via Supabase SecureStore tokens means most users won't see the login screen daily.
+  </div>
+</div>
+
+<!-- SECTION 4: DASHBOARD -->
+<div class="section" id="dashboard">
+  <div class="section-header">
+    <div class="section-icon" style="background:rgba(255,215,0,0.15); border:2px solid var(--primary);">🏠</div>
+    <div>
+      <h2>4. Dashboard — Central Hub</h2>
+      <div class="section-desc">Main navigation hub after login</div>
+    </div>
+  </div>
+
+  <div class="screen-card">
+    <h3>🏠 DashboardScreen</h3>
+    <div class="screen-route">Route: Dashboard (initial route when authenticated)</div>
+    <div class="screen-desc">The central hub of the application. Displays a grid of navigation tiles for all major modules, a quick stats summary, and recent activity. Acts as the single entry point to all features.</div>
+  </div>
+
+  <div class="flow-container">
+    <div class="flow-title">Dashboard Navigation Map — All Routes from Dashboard</div>
+    <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px;">
+      <div class="element-box" style="border-left:3px solid var(--accent-green);"><div class="elem-label">⛽ Sales Entry</div>→ SalesEntryScreen<br><small style="color:#888;">Pump sales, drum sales, history</small></div>
+      <div class="element-box" style="border-left:3px solid var(--accent-blue);"><div class="elem-label">📊 Stock Management</div>→ StockManagementScreen<br><small style="color:#888;">Levels, delivery, transit</small></div>
+      <div class="element-box" style="border-left:3px solid var(--accent-red);"><div class="elem-label">💰 Expense Entry</div>→ ExpenseEntryScreen<br><small style="color:#888;">Add expenses, categories</small></div>
+      <div class="element-box" style="border-left:3px solid var(--accent-purple);"><div class="elem-label">🔄 Fund Transfers</div>→ FundTransferScreen<br><small style="color:#888;">Inter-account transfers</small></div>
+      <div class="element-box" style="border-left:3px solid var(--accent-teal);"><div class="elem-label">💱 Exchange Rate</div>→ ExchangeRateScreen<br><small style="color:#888;">Multi-currency management</small></div>
+      <div class="element-box" style="border-left:3px solid var(--accent-orange);"><div class="elem-label">📈 Reports</div>→ ReportsScreen<br><small style="color:#888;">Sales, expense, consolidated</small></div>
+      <div class="element-box" style="border-left:3px solid var(--accent-pink);"><div class="elem-label">🏦 Accounts</div>→ AccountsScreen<br><small style="color:#888;">Receivable & payable</small></div>
+      <div class="element-box" style="border-left:3px solid #666;"><div class="elem-label">⛽ Pump Management</div>→ PumpAndDippingManagementScreen<br><small style="color:#888;">Pumps, dippings, readings</small></div>
+      <div class="element-box" style="border-left:3px solid var(--accent-green);"><div class="elem-label">🔔 Notifications</div>→ NotificationsScreen<br><small style="color:#888;">Alerts and messages</small></div>
+      <div class="element-box" style="border-left:3px solid var(--accent-blue);"><div class="elem-label">⚙️ Station Settings</div>→ StationSettingsScreen<br><small style="color:#888;">Config, profile, users</small></div>
+    </div>
+  </div>
+
+  <div class="detail-card">
+    <h4>Dashboard Features</h4>
+    <ul>
+      <li><strong>Quick Stats</strong> — Today's sales total, fuel stock levels, pending transfers, unread notifications count</li>
+      <li><strong>Navigation Grid</strong> — Icon tiles for each module (role-filtered: some tiles hidden for lower-privilege roles)</li>
+      <li><strong>Recent Activity</strong> — Last 5-10 transactions across sales, expenses, and transfers</li>
+      <li><strong>Quick Actions</strong> — Shortcuts for common tasks (Add Sale, Add Expense, Record Dip)</li>
+      <li><strong>Notification Badge</strong> — Unread notification count on the bell icon</li>
+    </ul>
+  </div>
+</div>
+
+<!-- SECTION 5: SALES MANAGEMENT FLOW -->
+<div class="section" id="sales">
+  <div class="section-header">
+    <div class="section-icon" style="background:rgba(46,204,113,0.15); border:2px solid var(--accent-green);">⛽</div>
+    <div>
+      <h2>5. Sales Management Flow</h2>
+      <div class="section-desc">Recording and tracking fuel sales</div>
+    </div>
+  </div>
+
+  <div class="flow-container">
+    <div class="flow-title">Sales Entry Flow</div>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="node end">🏠 Dashboard</div>
+        <div class="label">Entry point</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node feature">⛽ SalesEntry</div>
+        <div class="label">Mode selector</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node decision">📊 Choose Type</div>
+        <div class="label">Pump / Drum / History</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node screen">⛽ PumpSale</div>
+        <div class="label">Select pump, volume,<br>price, payment</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node action">✅ Submit</div>
+        <div class="label">Validate & save</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node screen">📋 Receipt</div>
+        <div class="label">Confirmation</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="screen-card">
+    <h3>⛽ SalesEntryScreen</h3>
+    <div class="screen-route">Route: SalesEntry (mode: 'dashboard' | 'add' | 'edit' | 'history')</div>
+    <div class="screen-desc">Multi-purpose screen that acts as both the sales dashboard and data entry form. Supports pump sales (PMS/AGO), drum sales, and sales history viewing.</div>
+    <div class="elements-grid">
+      <div class="element-box"><div class="elem-label">Dashboard Mode</div>Summary cards, today's totals, quick entry buttons, recent sales list</div>
+      <div class="element-box"><div class="elem-label">Add Mode — Pump</div>Pump selector, fuel type (PMS/AGO), volume (liters), price/liter, payment method, sale date/time</div>
+      <div class="element-box"><div class="elem-label">Add Mode — Drum</div>Drum type selector, quantity, price per drum, customer info, payment method</div>
+      <div class="element-box"><div class="elem-label">History Mode</div>Filterable list of all past sales, date range picker, export options</div>
+    </div>
+  </div>
+
+  <div class="detail-card">
+    <h4>Sales Entry Fields</h4>
+    <ul>
+      <li><strong>Pump Number</strong> — Select from configured pumps (dropdown)</li>
+      <li><strong>Fuel Type</strong> — PMS (Petrol) or AGO (Diesel) — radio selection</li>
+      <li><strong>Volume (Liters)</strong> — Numeric input with validation</li>
+      <li><strong>Price Per Liter</strong> — Auto-filled from station settings, editable</li>
+      <li><strong>Total Amount</strong> — Auto-calculated (volume × price)</li>
+      <li><strong>Payment Method</strong> — Cash / Card / Credit (selectable chips)</li>
+      <li><strong>Sale Date</strong> — Date-time picker, defaults to now</li>
+      <li><strong>Cashier</strong> — Auto-populated from logged-in user</li>
+    </ul>
+  </div>
+
+  <div class="screen-card">
+    <h3>⛽ PumpAndDippingManagementScreen</h3>
+    <div class="screen-route">Route: PumpAndDippingManagement</div>
+    <div class="screen-desc">Manages physical pump configuration and dipping operations. Lists all pumps, allows adding/editing pumps, and records dip readings for inventory reconciliation.</div>
+    <div class="elements-grid">
+      <div class="element-box"><div class="elem-label">Pump List</div>All pumps with status, fuel type, assigned nozzles</div>
+      <div class="element-box"><div class="elem-label">Add/Edit Pump</div>Pump number, fuel type, nozzle count, status toggle</div>
+      <div class="element-box"><div class="elem-label">Dip Readings</div>Record tank dip levels, compare with meter readings, variance calculation</div>
+      <div class="element-box"><div class="elem-label">Navigation</div>→ PumpManagementAndReadingScreen (detailed readings)</div>
+    </div>
+  </div>
+
+  <div class="screen-card">
+    <h3>⛽ PumpManagementAndReadingScreen</h3>
+    <div class="screen-route">Route: PumpManagementAndReading</div>
+    <div class="screen-desc">Detailed pump reading screen for recording meter start/end readings and calculating sales variance. Used for daily pump reconciliation.</div>
+    <div class="elements-grid">
+      <div class="element-box"><div class="elem-label">Meter Readings</div>Start reading, end reading, calculated volume, expected vs actual</div>
+      <div class="element-box"><div class="elem-label">Variance</div>Automatic calculation of discrepancies between meter and sales totals</div>
+      <div class="element-box"><div class="elem-label">History</div>Past readings per pump with date filtering</div>
+    </div>
+  </div>
+
+  <div class="nav-path">
+    <h4>Navigation: Sales Module</h4>
+    <div class="breadcrumb">
+      <span class="crumb current">Dashboard</span>
+      <span class="sep">→</span>
+      <span class="crumb">SalesEntry (dashboard mode)</span>
+      <span class="sep">→</span>
+      <span class="crumb">SalesEntry (add pump)</span>
+      <span class="sep">→</span>
+      <span class="crumb">Submit</span>
+      <span class="sep">→</span>
+      <span class="crumb">Confirmation/Receipt</span>
+    </div>
+    <div class="breadcrumb" style="margin-top:8px;">
+      <span class="crumb current">Dashboard</span>
+      <span class="sep">→</span>
+      <span class="crumb">SalesEntry (add drum)</span>
+      <span class="sep">→</span>
+      <span class="crumb">Submit</span>
+      <span class="sep">→</span>
+      <span class="crumb">Confirmation</span>
+    </div>
+    <div class="breadcrumb" style="margin-top:8px;">
+      <span class="crumb current">Dashboard</span>
+      <span class="sep">→</span>
+      <span class="crumb">SalesEntry (history)</span>
+      <span class="sep">→</span>
+      <span class="crumb">View/Edit Sale</span>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 6: STOCK & INVENTORY -->
+<div class="section" id="stock">
+  <div class="section-header">
+    <div class="section-icon" style="background:rgba(52,152,219,0.15); border:2px solid var(--accent-blue);">📊</div>
+    <div>
+      <h2>6. Stock & Inventory Flow</h2>
+      <div class="section-desc">Fuel stock tracking, delivery management, and transit monitoring</div>
+    </div>
+  </div>
+
+  <div class="flow-container">
+    <div class="flow-title">Stock Management Flow</div>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="node end">🏠 Dashboard</div>
+        <div class="label">Entry point</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node feature">📊 Stock Mgmt</div>
+        <div class="label">StockManagementScreen</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node decision">📊 Choose View</div>
+        <div class="label">Levels / Delivery / Transit</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node screen">🛢️ Stock Levels</div>
+        <div class="label">Current inventory<br>per tank</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node screen">🚚 Fuel Delivery</div>
+        <div class="label">Track incoming<br>fuel shipments</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node screen">🚢 Fuel Transit</div>
+        <div class="label">Track in-transit<br>fuel</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="screen-card">
+    <h3>📊 StockManagementScreen</h3>
+    <div class="screen-route">Route: StockManagement (mode: 'dashboard' | 'add' | 'edit')</div>
+    <div class="screen-desc">Central stock management hub showing current fuel levels across all tanks, stock variances, and navigation to delivery tracking and transit management.</div>
+    <div class="elements-grid">
+      <div class="element-box"><div class="elem-label">Dashboard</div>Stock level bars per tank (PMS/AGO), capacity %, variance alerts, low-stock warnings</div>
+      <div class="element-box"><div class="elem-label">Fuel Delivery</div>FuelDeliveryTrackingScreen — track tanker arrivals, quantities received, supplier info</div>
+      <div class="element-box"><div class="elem-label">Fuel Transit</div>FuelTransitTrackingScreen — monitor fuel in transit, expected arrival, tanker details</div>
+      <div class="element-box"><div class="elem-label">Dip Recording</div>Record dip readings for each tank, compare with pump meter readings</div>
+    </div>
+  </div>
+
+  <div class="detail-card">
+    <h4>Stock Data Captured</h4>
+    <ul>
+      <li><strong>Tank ID & Fuel Type</strong> — Which tank and whether it holds PMS or AGO</li>
+      <li><strong>Opening Stock</strong> — Volume at start of day/period</li>
+      <li><strong>Closing Stock</strong> — Current volume (from dip readings)</li>
+      <li><strong>Total Received</strong> — Sum of all fuel deliveries</li>
+      <li><strong>Total Sold</strong> — Sum of all pump sales for that fuel type</li>
+      <li><strong>Variance</strong> — Expected vs actual (expected = opening + received - sold)</li>
+      <li><strong>Reorder Level</strong> — Threshold for low-stock alerts</li>
+    </ul>
+  </div>
+
+  <div class="nav-path">
+    <h4>Navigation: Stock Module</h4>
+    <div class="breadcrumb">
+      <span class="crumb current">Dashboard</span>
+      <span class="sep">→</span>
+      <span class="crumb">StockManagement (dashboard)</span>
+      <span class="sep">→</span>
+      <span class="crumb">View Stock Levels</span>
+    </div>
+    <div class="breadcrumb" style="margin-top:8px;">
+      <span class="crumb current">StockManagement</span>
+      <span class="sep">→</span>
+      <span class="crumb">FuelDeliveryTracking</span>
+      <span class="sep">→</span>
+      <span class="crumb">Add/Edit Delivery</span>
+    </div>
+    <div class="breadcrumb" style="margin-top:8px;">
+      <span class="crumb current">StockManagement</span>
+      <span class="sep">→</span>
+      <span class="crumb">FuelTransitTracking</span>
+      <span class="sep">→</span>
+      <span class="crumb">Update Transit Status</span>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 7: EXPENSE MANAGEMENT -->
+<div class="section" id="expenses">
+  <div class="section-header">
+    <div class="section-icon" style="background:rgba(231,76,60,0.15); border:2px solid var(--accent-red);">💰</div>
+    <div>
+      <h2>7. Expense Management Flow</h2>
+      <div class="section-desc">Recording, categorizing, and analyzing station expenses</div>
+    </div>
+  </div>
+
+  <div class="flow-container">
+    <div class="flow-title">Expense Management Flow</div>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="node end">🏠 Dashboard</div>
+        <div class="label">Entry point</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node feature">💰 ExpenseEntry</div>
+        <div class="label">Main expense screen</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node decision">📊 Choose Mode</div>
+        <div class="label">Entry / History / Analytics</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node screen">➕ New Expense</div>
+        <div class="label">Category, amount,<br>description, date</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node action">✅ Submit</div>
+        <div class="label">Save to database</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node screen">📋 History</div>
+        <div class="label">Filterable expense list</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="screen-card">
+    <h3>💰 ExpenseEntryScreen</h3>
+    <div class="screen-route">Route: ExpenseEntry (mode: 'dashboard' | 'add' | 'edit' | 'history')</div>
+    <div class="screen-desc">Multi-purpose expense screen with onboarding for first-time users, expense entry form, history viewer, and analytics dashboard.</div>
+    <div class="elements-grid">
+      <div class="element-box"><div class="elem-label">Onboarding</div>First-time intro explaining expense tracking benefits (ExpenseOnboardingScreen)</div>
+      <div class="element-box"><div class="elem-label">Dashboard Mode</div>Today's expenses, category breakdown chart, recent expenses list</div>
+      <div class="element-box"><div class="elem-label">Add Mode</div>Category dropdown, amount input, description field, date picker, receipt attachment, payment method</div>
+      <div class="element-box"><div class="elem-label">History Mode</div>ExpenseHistoryScreen — searchable list with date range, category, and amount filters</div>
+    </div>
+  </div>
+
+  <div class="detail-card">
+    <h4>Expense Categories</h4>
+    <ul>
+      <li>⛽ Fuel Purchase</li>
+      <li>👷 Staff Salaries</li>
+      <li>🏗️ Maintenance & Repairs</li>
+      <li>💡 Utilities (Electricity, Water)</li>
+      <li>📋 Rent & Lease</li>
+      <li>🚛 Transportation</li>
+      <li>📦 Office Supplies</li>
+      <li>📱 Communication</li>
+      <li>🛡️ Insurance</li>
+      <li>📑 Tax & Licensing</li>
+      <li>🎁 Miscellaneous</li>
+    </ul>
+  </div>
+
+  <div class="detail-card">
+    <h4>Expense Entry Fields</h4>
+    <ul>
+      <li><strong>Category</strong> — Dropdown selection from predefined categories</li>
+      <li><strong>Amount</strong> — Numeric input with currency formatting</li>
+      <li><strong>Description</strong> — Free-text description of the expense</li>
+      <li><strong>Date</strong> — Date picker (defaults to today)</li>
+      <li><strong>Payment Method</strong> — Cash / Card / Transfer</li>
+      <li><strong>Receipt</strong> — Optional photo attachment (camera or gallery)</li>
+      <li><strong>Recorded By</strong> — Auto-populated from current user</li>
+    </ul>
+  </div>
+
+  <div class="nav-path">
+    <h4>Navigation: Expense Module</h4>
+    <div class="breadcrumb">
+      <span class="crumb current">Dashboard</span>
+      <span class="sep">→</span>
+      <span class="crumb">ExpenseEntry</span>
+      <span class="sep">→</span>
+      <span class="crumb">[Onboarding (first time only)]</span>
+      <span class="sep">→</span>
+      <span class="crumb">Add Expense → Submit → Confirmation</span>
+    </div>
+    <div class="breadcrumb" style="margin-top:8px;">
+      <span class="crumb current">ExpenseEntry</span>
+      <span class="sep">→</span>
+      <span class="crumb">ExpenseHistory</span>
+      <span class="sep">→</span>
+      <span class="crumb">View/Edit Expense</span>
+    </div>
+    <div class="breadcrumb" style="margin-top:8px;">
+      <span class="crumb current">ExpenseEntry</span>
+      <span class="sep">→</span>
+      <span class="crumb">ExpenseAnalytics</span>
+      <span class="sep">→</span>
+      <span class="crumb">Charts & Breakdown</span>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 8: FUND TRANSFERS -->
+<div class="section" id="transfers">
+  <div class="section-header">
+    <div class="section-icon" style="background:rgba(155,89,182,0.15); border:2px solid var(--accent-purple);">🔄</div>
+    <div>
+      <h2>8. Fund Transfers Flow</h2>
+      <div class="section-desc">Inter-account fund transfers</div>
+    </div>
+  </div>
+
+  <div class="flow-container">
+    <div class="flow-title">Fund Transfer Flow</div>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="node end">🏠 Dashboard</div>
+        <div class="label">Entry point</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node feature">🔄 FundTransfer</div>
+        <div class="label">Transfer hub</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node decision">📊 Choose</div>
+        <div class="label">New / History</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node screen">➕ New Transfer</div>
+        <div class="label">Source account,<br>destination, amount</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node action">✅ Confirm</div>
+        <div class="label">Verify details</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node screen">📋 Receipt</div>
+        <div class="label">Transfer confirmation</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="screen-card">
+    <h3>🔄 FundTransferScreen</h3>
+    <div class="screen-route">Route: FundTransfer</div>
+    <div class="screen-desc">Hub for managing inter-account fund transfers. Shows summary of accounts, recent transfers, and provides entry point to create new transfers.</div>
+    <div class="elements-grid">
+      <div class="element-box"><div class="elem-label">Summary</div>Account balances, recent transfer totals, pending transfers</div>
+      <div class="element-box"><div class="elem-label">Actions</div>"New Transfer" button, view history, filter by date/status</div>
+      <div class="element-box"><div class="elem-label">Navigation</div>→ NewTransferScreen, TransferHistory</div>
+    </div>
+  </div>
+
+  <div class="screen-card">
+    <h3>➕ NewTransferScreen</h3>
+    <div class="screen-route">Route: NewTransfer</div>
+    <div class="screen-desc">Form for creating a new inter-account fund transfer with validation and confirmation.</div>
+    <div class="elements-grid">
+      <div class="element-box"><div class="elem-label">Fields</div>Source account, destination account, amount, currency, exchange rate (if cross-currency), description, date</div>
+      <div class="element-box"><div class="elem-label">Validation</div>Sufficient balance check, same-account prevention, amount validation</div>
+      <div class="element-box"><div class="elem-label">Actions</div>Preview summary → Confirm Transfer → Receipt/Confirmation</div>
+    </div>
+  </div>
+
+  <div class="detail-card">
+    <h4>Transfer Details Captured</h4>
+    <ul>
+      <li><strong>Source Account</strong> — Account to debit (dropdown of available accounts)</li>
+      <li><strong>Destination Account</strong> — Account to credit</li>
+      <li><strong>Amount</strong> — Transfer amount with currency</li>
+      <li><strong>Currency</strong> — NGN, USD, EUR, GBP, or CDF</li>
+      <li><strong>Exchange Rate</strong> — Applied if cross-currency transfer</li>
+      <li><strong>Description</strong> — Purpose of transfer</li>
+      <li><strong>Status</strong> — Pending → Completed → Reversed</li>
+      <li><strong>Initiated By</strong> — User who created the transfer</li>
+    </ul>
+  </div>
+</div>
+
+<!-- SECTION 9: EXCHANGE RATE -->
+<div class="section" id="exchange">
+  <div class="section-header">
+    <div class="section-icon" style="background:rgba(243,156,18,0.15); border:2px solid var(--accent-orange);">💱</div>
+    <div>
+      <h2>9. Exchange Rate Management Flow</h2>
+      <div class="section-desc">Multi-currency exchange rate management</div>
+    </div>
+  </div>
+
+  <div class="screen-card">
+    <h3>💱 ExchangeRateScreen</h3>
+    <div class="screen-route">Route: ExchangeRate</div>
+    <div class="screen-desc">Manages exchange rates between supported currencies (NGN, USD, EUR, GBP, CDF). Displays current rates, allows admin updates, and shows rate history.</div>
+    <div class="elements-grid">
+      <div class="element-box"><div class="elem-label">Rate Display</div>Current rates in a matrix/grid format, last updated timestamp</div>
+      <div class="element-box"><div class="elem-label">Update Form</div>Base currency selector, target currency, rate input, effective date (admin only)</div>
+      <div class="element-box"><div class="elem-label">History</div>Past rate changes with timestamps and modifying user</div>
+      <div class="element-box"><div class="elem-label">Permissions</div>Admin/Manager can edit rates; Cashier/Viewer read-only</div>
+    </div>
+  </div>
+
+  <div class="detail-card">
+    <h4>Supported Currencies</h4>
+    <ul>
+      <li><strong>NGN</strong> — Nigerian Naira (base currency)</li>
+      <li><strong>USD</strong> — US Dollar</li>
+      <li><strong>EUR</strong> — Euro</li>
+      <li><strong>GBP</strong> — British Pound</li>
+      <li><strong>CDF</strong> — Congolese Franc</li>
+    </ul>
+  </div>
+</div>
+
+<!-- SECTION 10: ACCOUNTS RECEIVABLE & PAYABLE -->
+<div class="section" id="accounts">
+  <div class="section-header">
+    <div class="section-icon" style="background:rgba(233,30,99,0.15); border:2px solid var(--accent-pink);">🏦</div>
+    <div>
+      <h2>10. Accounts Receivable & Payable Flow</h2>
+      <div class="section-desc">Credit sales tracking and payables management</div>
+    </div>
+  </div>
+
+  <div class="flow-container">
+    <div class="flow-title">Accounts Management Flow</div>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="node end">🏠 Dashboard</div>
+        <div class="label">Entry point</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node feature">🏦 Accounts</div>
+        <div class="label">AccountsScreen</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node decision">📊 Choose</div>
+        <div class="label">Receivable / Payable</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node screen">📥 Receivable</div>
+        <div class="label">Money owed TO station</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node screen">📤 Payable</div>
+        <div class="label">Money station OWES</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="screen-card">
+    <h3>🏦 AccountsScreen</h3>
+    <div class="screen-route">Route: Accounts</div>
+    <div class="screen-desc">Central accounts hub showing summary of receivables and payables, aging analysis, and navigation to detailed views.</div>
+    <div class="elements-grid">
+      <div class="element-box"><div class="elem-label">Summary Cards</div>Total receivable, total payable, net position, overdue amounts</div>
+      <div class="element-box"><div class="elem-label">Aging Analysis</div>Current, 30-day, 60-day, 90+ day buckets</div>
+      <div class="element-box"><div class="elem-label">Quick Actions</div>New receivable, new payable, record payment</div>
+      <div class="element-box"><div class="elem-label">Navigation</div>→ AccountsReceivable, AccountsPayable, AccountDetailScreen, NewAccountEntryScreen</div>
+    </div>
+  </div>
+
+  <div class="screen-card">
+    <h3>📥 AccountReceivable / 📤 AccountPayable</h3>
+    <div class="screen-route">Routes: AccountsReceivable, AccountsPayable</div>
+    <div class="screen-desc">Detailed lists of outstanding receivables (credit sales to customers) or payables (amounts owed to suppliers). Each entry tracks customer/supplier, amount, due date, status, and payment history.</div>
+    <div class="elements-grid">
+      <div class="element-box"><div class="elem-label">List View</div>Filterable/searchable list with status badges (Pending, Partial, Paid, Overdue)</div>
+      <div class="element-box"><div class="elem-label">Entry Fields</div>Customer/Supplier name, original amount, remaining balance, due date, interest rate, description</div>
+      <div class="element-box"><div class="elem-label">Payment Recording</div>Record partial or full payments against an account</div>
+      <div class="element-box"><div class="elem-label">Navigation</div>→ AccountDetailScreen (transaction history), NewAccountEntryScreen (create new)</div>
+    </div>
+  </div>
+
+  <div class="detail-card">
+    <h4>Account Entry Fields</h4>
+    <ul>
+      <li><strong>Type</strong> — Receivable or Payable</li>
+      <li><strong>Customer/Supplier Name</strong> — Text input</li>
+      <li><strong>Original Amount</strong> — The initial credit amount</li>
+      <li><strong>Remaining Balance</strong> — Auto-calculated as payments are recorded</li>
+      <li><strong>Due Date</strong> — When payment is expected/due</li>
+      <li><strong>Status</strong> — Pending / Partial / Paid / Overdue (auto-updated)</li>
+      <li><strong>Payment History</strong> — List of all payments made against this entry</li>
+      <li><strong>Notes</strong> — Additional context or references</li>
+    </ul>
+  </div>
+</div>
+
+<!-- SECTION 11: REPORTS -->
+<div class="section" id="reports">
+  <div class="section-header">
+    <div class="section-icon" style="background:rgba(26,188,156,0.15); border:2px solid var(--accent-teal);">📈</div>
+    <div>
+      <h2>11. Reports & Analytics Flow</h2>
+      <div class="section-desc">Generating and viewing operational reports</div>
+    </div>
+  </div>
+
+  <div class="flow-container">
+    <div class="flow-title">Reports Flow</div>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="node end">🏠 Dashboard</div>
+        <div class="label">Entry point</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node feature">📈 Reports</div>
+        <div class="label">ReportsScreen</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node decision">📊 Report Type</div>
+        <div class="label">Sales / Expense /<br>Daily / Custom</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node screen">🔍 Filters</div>
+        <div class="label">Date range,<br>fuel type, category</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node screen">📊 Report View</div>
+        <div class="label">Charts, tables,<br>summaries</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node action">📤 Export</div>
+        <div class="label">PDF / Print / Share</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="screen-card">
+    <h3>📈 ReportsScreen</h3>
+    <div class="screen-route">Route: Reports</div>
+    <div class="screen-desc">Central reports hub listing all available report types with preview thumbnails and quick generation buttons.</div>
+    <div class="elements-grid">
+      <div class="element-box"><div class="elem-label">Report Types</div>Sales Report, Expense Report, Daily Consolidated Report, Fuel Analytics, Stock Report, Financial Overview, Custom Report Generator</div>
+      <div class="element-box"><div class="elem-label">Quick Filters</div>Date range presets (Today, This Week, This Month, Custom), fuel type filter</div>
+      <div class="element-box"><div class="elem-label">Export Options</div>PDF generation (expo-print), file sharing (expo-file-system), print</div>
+    </div>
+  </div>
+
+  <div class="detail-card">
+    <h4>Available Reports</h4>
+    <ul>
+      <li><strong>📊 Sales Report</strong> — Revenue by period, fuel type breakdown, payment method split, top-performing pumps</li>
+      <li><strong>💰 Expense Report</strong> — Category breakdown, trends over time, comparison periods</li>
+      <li><strong>📋 Daily Consolidated Report</strong> — Complete daily summary: sales, expenses, stock, cash position</li>
+      <li><strong>⛽ Fuel Analytics</strong> — Volume sold by fuel type, margin analysis, delivery vs sales comparison</li>
+      <li><strong>📊 Stock Report</strong> — Current levels, variances, consumption rates, reorder projections</li>
+      <li><strong>💼 Financial Overview</strong> — Revenue, expenses, net profit, receivables/payables summary</li>
+      <li><strong>🔧 Custom Report</strong> — User-configurable report with selectable metrics and date ranges</li>
+    </ul>
+  </div>
+
+  <div class="detail-card">
+    <h4>Report Features</h4>
+    <ul>
+      <li><strong>Chart Visualizations</strong> — LineChart, BarChart, DonutChart, ProgressChart (custom-built components)</li>
+      <li><strong>Data Tables</strong> — Sortable, filterable tables for detailed data</li>
+      <li><strong>Date Range Selection</strong> — Start/end date pickers with presets</li>
+      <li><strong>Export</strong> — PDF generation via expo-print, file save via expo-file-system</li>
+      <li><strong>Print</strong> — Direct print capability for physical copies</li>
+    </ul>
+  </div>
+</div>
+
+<!-- SECTION 12: NOTIFICATIONS -->
+<div class="section" id="notifications">
+  <div class="section-header">
+    <div class="section-icon" style="background:rgba(243,156,18,0.15); border:2px solid var(--accent-orange);">🔔</div>
+    <div>
+      <h2>12. Notifications Flow</h2>
+      <div class="section-desc">Notification center and alert management</div>
+    </div>
+  </div>
+
+  <div class="screen-card">
+    <h3>🔔 NotificationsScreen</h3>
+    <div class="screen-route">Route: Notifications</div>
+    <div class="screen-desc">Notification center displaying all system notifications with filtering, read/unread status, and action capabilities.</div>
+    <div class="elements-grid">
+      <div class="element-box"><div class="elem-label">Notification List</div>Chronological list with type icons (info/warning/error/success), read/unread indicators</div>
+      <div class="element-box"><div class="elem-label">Filters</div>All / Unread / By type (info, warning, error, success)</div>
+      <div class="element-box"><div class="elem-label">Actions</div>Mark as read, mark all as read, delete, tap to navigate to related screen</div>
+      <div class="element-box"><div class="elem-label">Push Notifications</div>Expo Notifications integration for real-time alerts (low stock, large transactions, etc.)</div>
+    </div>
+  </div>
+
+  <div class="detail-card">
+    <h4>Notification Types</h4>
+    <ul>
+      <li><strong>ℹ️ Info</strong> — General updates (new user registered, settings changed)</li>
+      <li><strong>⚠️ Warning</strong> — Low stock alerts, approaching reorder levels, large variances</li>
+      <li><strong>🔴 Error</strong> — Failed transactions, sync errors, system issues</li>
+      <li><strong>🟢 Success</strong> — Completed transfers, successful deliveries, reconciliations</li>
+    </ul>
+  </div>
+
+  <div class="screen-card">
+    <h3>📬 NotificationCard (Component)</h3>
+    <div class="screen-route">Component: src/components/NotificationCard.tsx</div>
+    <div class="screen-desc">Reusable notification card component with icon, title, message, timestamp, and action button. Used in both the notification center and dashboard previews.</div>
+  </div>
+</div>
+
+<!-- SECTION 13: SETTINGS -->
+<div class="section" id="settings">
+  <div class="section-header">
+    <div class="section-icon" style="background:rgba(52,152,219,0.15); border:2px solid var(--accent-blue);">⚙️</div>
+    <div>
+      <h2>13. Station Settings & Profile Flow</h2>
+      <div class="section-desc">Configuration, user management, and security</div>
+    </div>
+  </div>
+
+  <div class="flow-container">
+    <div class="flow-title">Settings Navigation Flow</div>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="node end">🏠 Dashboard</div>
+        <div class="label">Entry point</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node feature">⚙️ Settings</div>
+        <div class="label">StationSettings</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node decision">📊 Choose</div>
+        <div class="label">Profile / Users /<br>Station / Security</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="screen-card">
+    <h3>⚙️ StationSettingsScreen</h3>
+    <div class="screen-route">Route: StationSettings</div>
+    <div class="screen-desc">Central settings hub with navigation to profile management, user administration, station configuration, and security audit logs.</div>
+    <div class="elements-grid">
+      <div class="element-box"><div class="elem-label">Menu Items</div>Profile, User Management, Station Configuration, Security Events, App Settings, About, Logout</div>
+      <div class="element-box"><div class="elem-label">Access Control</div>User Management and Security Events restricted to Admin role</div>
+    </div>
+  </div>
+
+  <div class="detail-card">
+    <h4>Settings Sub-sections</h4>
+    <ul>
+      <li><strong>👤 Profile</strong> — View/edit user profile (name, email, phone, PIN change, avatar)</li>
+      <li><strong>👥 User Management</strong> — (Admin only) List all users, add new users, assign roles, activate/deactivate accounts</li>
+      <li><strong>🏗️ Station Configuration</strong> — Station name, fuel pump prices, tank capacities, currency settings, operating hours</li>
+      <li><strong>🔒 Security Events</strong> — (Admin only) Audit log of all security-relevant actions (login attempts, role changes, data modifications)</li>
+      <li><strong>📱 App Settings</strong> — Notification preferences, theme, language, data sync settings</li>
+      <li><strong>ℹ️ About</strong> — App version, credits, terms of service, privacy policy</li>
+      <li><strong>🚪 Logout</strong> — Clear session, return to PIN login</li>
+    </ul>
+  </div>
+</div>
+
+<!-- SECTION 14: PERMISSIONS MATRIX -->
+<div class="section" id="permissions">
+  <div class="section-header">
+    <div class="section-icon" style="background:rgba(231,76,60,0.15); border:2px solid var(--accent-red);">🔒</div>
+    <div>
+      <h2>14. Role-Based Permissions Matrix</h2>
+      <div class="section-desc">What each user role can access and modify</div>
+    </div>
+  </div>
+
+  <div class="table-wrapper" style="overflow-x:auto;">
+    <table class="matrix-table">
+      <thead>
+        <tr>
+          <th>Feature / Module</th>
+          <th><span class="role-tag role-admin">Admin</span></th>
+          <th><span class="role-tag role-manager">Manager</span></th>
+          <th><span class="role-tag role-cashier">Cashier</span></th>
+          <th><span class="role-tag role-viewer">Viewer</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>Dashboard</strong></td><td class="check">✅ Full</td><td class="check">✅ Full</td><td class="check">✅ Limited</td><td class="check">✅ Read-only</td></tr>
+        <tr><td><strong>Sales Entry</strong></td><td class="check">✅ Create/Edit/Delete</td><td class="check">✅ Create/Edit</td><td class="check">✅ Create only</td><td class="cross">❌ Read-only</td></tr>
+        <tr><td><strong>Sales History</strong></td><td class="check">✅ All records</td><td class="check">✅ All records</td><td class="partial">⚠️ Own records</td><td class="check">✅ Read-only</td></tr>
+        <tr><td><strong>Stock Management</strong></td><td class="check">✅ Full</td><td class="check">✅ Full</td><td class="partial">⚠️ Dip readings only</td><td class="cross">❌ Read-only</td></tr>
+        <tr><td><strong>Fuel Delivery</strong></td><td class="check">✅ Full</td><td class="check">✅ Create/Edit</td><td class="cross">❌ View only</td><td class="cross">❌ View only</td></tr>
+        <tr><td><strong>Expense Entry</strong></td><td class="check">✅ Full</td><td class="check">✅ Create/Edit</td><td class="check">✅ Create only</td><td class="cross">❌ Read-only</td></tr>
+        <tr><td><strong>Expense Categories</strong></td><td class="check">✅ Manage</td><td class="partial">⚠️ View only</td><td class="cross">❌ No access</td><td class="cross">❌ No access</td></tr>
+        <tr><td><strong>Fund Transfers</strong></td><td class="check">✅ Full</td><td class="check">✅ Create/Approve</td><td class="cross">❌ View only</td><td class="cross">❌ View only</td></tr>
+        <tr><td><strong>Exchange Rates</strong></td><td class="check">✅ Full</td><td class="check">✅ Edit</td><td class="cross">❌ View only</td><td class="cross">❌ View only</td></tr>
+        <tr><td><strong>Accounts Receivable</strong></td><td class="check">✅ Full</td><td class="check">✅ Create/Edit</td><td class="partial">⚠️ Record payments</td><td class="cross">❌ View only</td></tr>
+        <tr><td><strong>Accounts Payable</strong></td><td class="check">✅ Full</td><td class="check">✅ Create/Edit</td><td class="cross">❌ View only</td><td class="cross">❌ View only</td></tr>
+        <tr><td><strong>Reports</strong></td><td class="check">✅ All reports</td><td class="check">✅ All reports</td><td class="partial">⚠️ Basic reports</td><td class="check">✅ Read-only</td></tr>
+        <tr><td><strong>Report Export/Print</strong></td><td class="check">✅ Yes</td><td class="check">✅ Yes</td><td class="cross">❌ No</td><td class="cross">❌ No</td></tr>
+        <tr><td><strong>Notifications</strong></td><td class="check">✅ Full</td><td class="check">✅ Full</td><td class="check">✅ Full</td><td class="check">✅ Read-only</td></tr>
+        <tr><td><strong>User Management</strong></td><td class="check">✅ Full</td><td class="cross">❌ No access</td><td class="cross">❌ No access</td><td class="cross">❌ No access</td></tr>
+        <tr><td><strong>Station Settings</strong></td><td class="check">✅ Full</td><td class="partial">⚠️ Limited</td><td class="cross">❌ Profile only</td><td class="cross">❌ Profile only</td></tr>
+        <tr><td><strong>Security Events</strong></td><td class="check">✅ Full</td><td class="cross">❌ No access</td><td class="cross">❌ No access</td><td class="cross">❌ No access</td></tr>
+        <tr><td><strong>Pump Management</strong></td><td class="check">✅ Full</td><td class="check">✅ Full</td><td class="partial">⚠️ Readings only</td><td class="cross">❌ Read-only</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="legend" style="margin-top:20px;">
+    <div class="legend-item"><span class="check">✅</span> Full or Allowed Access</div>
+    <div class="legend-item"><span class="partial">⚠️</span> Limited/Partial Access</div>
+    <div class="legend-item"><span class="cross">❌</span> No Access</div>
+  </div>
+
+  <div class="info-box">
+    <div class="info-label">ℹ️ Role Hierarchy</div>
+    <strong>Admin</strong> has unrestricted access to all features. <strong>Manager</strong> has operational access but cannot manage users or view security logs. <strong>Cashier</strong> can enter sales and expenses but has limited view/edit scope. <strong>Viewer</strong> has read-only access across the entire application. All roles can update their own profile and view notifications.
+  </div>
+</div>
+
+<!-- SECTION 15: COMPLETE APP LIFECYCLE -->
+<div class="section" id="lifecycle">
+  <div class="section-header">
+    <div class="section-icon" style="background:rgba(255,215,0,0.15); border:2px solid var(--primary);">🔄</div>
+    <div>
+      <h2>15. Complete App Lifecycle — End-to-End User Journey</h2>
+      <div class="section-desc">The full experience from app installation to daily operations</div>
+    </div>
+  </div>
+
+  <div class="flow-container">
+    <div class="flow-title">Day 1: First-Time User Journey</div>
+    <div class="vflow">
+      <div class="flow-step">
+        <div class="node end">📲 App Installed & Launched</div>
+        <div class="label">User downloads from app store</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node screen">🚀 Splash Screen</div>
+        <div class="label">3-second branded splash</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node feature">📖 Onboarding (4 pages)</div>
+        <div class="label">Swipe through features or skip</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node screen">👋 Welcome Screen</div>
+        <div class="label">Shows assigned role & permissions</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node auth">🔢 PIN Login</div>
+        <div class="label">Enter 6-digit PIN (provided by admin)</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node end">🏠 Dashboard</div>
+        <div class="label">See available modules based on role</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node feature">💰 Expense Onboarding</div>
+        <div class="label">First-time expense tracking intro</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node action">📊 Start Operations</div>
+        <div class="label">Record sales, manage stock, etc.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow-container">
+    <div class="flow-title">Daily Operations Flow (Cashier — Typical Day)</div>
+    <div class="vflow">
+      <div class="flow-step">
+        <div class="node auth">🔢 PIN Login</div>
+        <div class="label">Session may persist — skip if still authenticated</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node end">🏠 Dashboard Check</div>
+        <div class="label">View today's stats, notifications</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node screen">⛽ Record Pump Sale</div>
+        <div class="label">Select pump → enter volume → save</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node screen">🛢️ Record Dip Reading</div>
+        <div class="label">Enter tank dip level → check variance</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node screen">💰 Log Expense</div>
+        <div class="label">Category → amount → description → save</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node screen">🏦 Record Credit Sale</div>
+        <div class="label">Customer name → amount → due date</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node screen">📋 End-of-Day Review</div>
+        <div class="label">Check daily consolidated report</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow-container">
+    <div class="flow-title">Admin Weekly Operations Flow</div>
+    <div class="vflow">
+      <div class="flow-step">
+        <div class="node screen">📊 Review Reports</div>
+        <div class="label">Sales, expense, and stock reports for the week</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node screen">🚚 Approve Fuel Delivery</div>
+        <div class="label">Confirm delivery, update stock</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node screen">🔄 Process Transfers</div>
+        <div class="label">Approve pending fund transfers</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node screen">💱 Update Exchange Rates</div>
+        <div class="label">Adjust rates for the new week</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node screen">👥 Manage Users</div>
+        <div class="label">Add/modify/deactivate staff accounts</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node screen">🔒 Security Audit</div>
+        <div class="label">Review security event logs</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="node screen">📤 Export Reports</div>
+        <div class="label">Generate PDFs for stakeholders</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow-container">
+    <div class="flow-title">Complete Screen-to-Screen Navigation Map</div>
+    <div style="font-family: monospace; font-size: 0.82em; line-height: 1.8; color: var(--text-light); white-space: pre-wrap;">
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          BISMILLAHI OPERATIONS                              │
+│                     Complete Navigation Architecture                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  🚀 SplashScreen                                                            │
+│    └─→ 📖 WelcomeOnboarding (4 pages: swipe/skip)                          │
+│         └─→ 👋 WelcomeScreen (role + permissions)                          │
+│              ├─→ 🔢 PinLoginScreen                                         │
+│              │    ├─→ 🏠 DashboardScreen ◄── MAIN HUB                      │
+│              │    │    ├─→ ⛽ SalesEntry ──→ PumpSale / DrumSale / History │
+│              │    │    ├─→ 📊 StockManagement ──→ Delivery / Transit       │
+│              │    │    ├─→ 💰 ExpenseEntry ──→ History / Analytics         │
+│              │    │    ├─→ 🔄 FundTransfer ──→ NewTransfer / History       │
+│              │    │    ├─→ 💱 ExchangeRate                                 │
+│              │    │    ├─→ 📈 Reports ──→ Sales / Expense / Daily / Custom │
+│              │    │    ├─→ 🏦 Accounts ──→ Receivable / Payable / Detail   │
+│              │    │    ├─→ 🔔 Notifications                                │
+│              │    │    ├─→ ⛽ PumpManagement ──→ DipReadings               │
+│              │    │    └─→ ⚙️ StationSettings                              │
+│              │    │         ├─→ 👤 Profile                                  │
+│              │    │         ├─→ 👥 UserManagement (admin)                  │
+│              │    │         ├─→ 🏗️ StationConfig                           │
+│              │    │         └─→ 🔒 SecurityEvents (admin)                  │
+│              │    ├─→ 🔑 ForgotPassword → ResetPassword → back to Login   │
+│              │    └─→ 📝 SignupScreen → Welcome → Dashboard                │
+│              └─→ (new users get PIN from admin)                            │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘</div>
+  </div>
+
+  <div class="warn-box">
+    <div class="warn-label">⚠️ Key UX Observations & Recommendations</div>
+    <ul style="list-style:none; padding:0;">
+      <li style="padding:4px 0;">1. <strong>No Bottom Tabs</strong> — The app uses a single flat stack navigator. All navigation goes through the Dashboard. This is simple but may feel navigation-heavy for frequent actions.</li>
+      <li style="padding:4px 0;">2. <strong>Multi-Purpose Screens</strong> — Screens like SalesEntryScreen use a <code>mode</code> prop to render different views (dashboard/add/edit/history). This reduces screen count but increases complexity.</li>
+      <li style="padding:4px 0;">3. <strong>PIN Authentication</strong> — Simple 6-digit PIN login is fast and station-friendly (staff can quickly log in on shared devices).</li>
+      <li style="padding:4px 0;">4. <strong>Role-Gated Navigation</strong> — Dashboard tiles are filtered by role, so users only see what they can access. No dead-end screens.</li>
+      <li style="padding:4px 0;">5. <strong>Session Persistence</strong> — Supabase tokens in SecureStore mean users rarely need to re-enter PIN (session auto-refresh).</li>
+      <li style="padding:4px 0;">6. <strong>Offline Concern</strong> — Types include OfflineOperation and SyncStatus, suggesting planned offline capability, but current implementation relies on live Supabase connection.</li>
+      <li style="padding:4px 0;">7. <strong>Print/Export</strong> — Reports use expo-print and expo-file-system for PDF generation and sharing.</li>
+    </ul>
+  </div>
+
+  <div class="flow-container">
+    <div class="flow-title">Data Flow Summary — How Information Moves Through the App</div>
+    <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 15px;">
+      <div class="element-box" style="border-left:3px solid var(--accent-green);">
+        <div class="elem-label">Sales → Stock</div>
+        When a pump sale is recorded, the system decrements the corresponding fuel tank's stock level. Volume sold is subtracted from available inventory.
+      </div>
+      <div class="element-box" style="border-left:3px solid var(--accent-blue);">
+        <div class="elem-label">Dip Readings → Variance</div>
+        Physical dip readings are compared against calculated stock (opening + received - sold). Variance alerts trigger when discrepancy exceeds threshold.
+      </div>
+      <div class="element-box" style="border-left:3px solid var(--accent-red);">
+        <div class="elem-label">Sales → Accounts</div>
+        Credit sales automatically create entries in Accounts Receivable. Payments against receivables update the remaining balance.
+      </div>
+      <div class="element-box" style="border-left:3px solid var(--accent-purple);">
+        <div class="elem-label">Transfers → Accounts</div>
+        Fund transfers debit source account and credit destination. Cross-currency transfers apply current exchange rates.
+      </div>
+      <div class="element-box" style="border-left:3px solid var(--accent-orange);">
+        <div class="elem-label">All Data → Reports</div>
+        Sales, expenses, stock movements, and account transactions feed into report generation with date-range filtering and aggregation.
+      </div>
+      <div class="element-box" style="border-left:3px solid var(--accent-pink);">
+        <div class="elem-label">Events → Notifications</div>
+        System events (low stock, large transactions, security events) automatically generate notifications displayed in the notification center.
+      </div>
+    </div>
+  </div>
+
+  <div class="flow-container">
+    <div class="flow-title">API Service Layer — Backend Interactions</div>
+    <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px;">
+      <div class="element-box"><div class="elem-label">Authentication</div>Supabase Auth — PIN validation, session management, token refresh, password reset</div>
+      <div class="element-box"><div class="elem-label">Pump Sales Service</div>CRUD operations on pump_sales table, with pump and fuel type relations</div>
+      <div class="element-box"><div class="elem-label">Pump Reading Service</div>Meter readings, variance calculations, dip reading recording</div>
+      <div class="element-box"><div class="elem-label">Stock Management Service</div>Stock levels, delivery tracking, transit monitoring, variance alerts</div>
+      <div class="element-box"><div class="elem-label">Reports Service</div>Aggregation queries, date-range filtering, multi-table joins for consolidated data</div>
+      <div class="element-box"><div class="elem-label">Notification Service</div>CRUD for notifications, read/unread tracking, push notification triggers</div>
+      <div class="element-box"><div class="elem-label">Station Service</div>Station configuration, pump settings, fuel prices, tank capacities</div>
+      <div class="element-box"><div class="elem-label">Exchange Rate Service</div>Rate CRUD, conversion calculations, historical rates</div>
+    </div>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<div style="text-align:center; padding:40px 0; margin-top:60px; border-top:2px solid var(--border-color); color:#666;">
+  <div style="font-size:1.2em; color:var(--primary); margin-bottom:10px;">⛽ BISMILLAHI OPERATIONS</div>
+  <div>User Flow Documentation — Generated 13 June 2026</div>
+  <div style="margin-top:5px;">Expo SDK 54 · React Native · TypeScript · Supabase</div>
+  <div style="margin-top:15px; font-size:0.85em;">This document covers all user-facing screens, navigation paths,<br>role-based permissions, and data flows across the entire application.</div>
+</div>
+
+</div><!-- /container -->
+</body>
+</html>

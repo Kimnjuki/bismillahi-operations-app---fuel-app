@@ -15,8 +15,6 @@ config.resolver.assetExts.push(
 config.watchFolders = [
   `${__dirname}/src`,
   `${__dirname}/assets`,
-  `${__dirname}/App.tsx`,
-  `${__dirname}/app.json`,
 ];
 
 config.resolver.blockList = [

@@ -163,16 +163,21 @@ class TankService {
   }
 
   // Update dipping readings for multiple tanks
-  async updateDippingReadings(tankReadings: { tankId: string; dippingReading: number }[], recordedBy: string): Promise<ApiResponse<DippingReading[]>> {
+  async updateDippingReadings(
+    tankReadings: { tankId: string; dippingReading: number }[],
+    recordedBy: string,
+    readingDate?: string,
+  ): Promise<ApiResponse<DippingReading[]>> {
     try {
       const readings: Omit<DippingReading, 'id' | 'created_at' | 'updated_at'>[] = [];
       const tankUpdates: { id: string; current_dipping: number; variance: number }[] = [];
+      const totals = new Map<string, number>();
+      const readingDateStr = readingDate || new Date().toISOString().split('T')[0];
 
       for (const reading of tankReadings) {
-        // Get current tank data
         const { data: tank } = await supabase
           .from('tanks')
-          .select('closing_book_stock')
+          .select('closing_book_stock, station_id, fuel_type')
           .eq('id', reading.tankId)
           .single();
 
@@ -181,7 +186,7 @@ class TankService {
           
           readings.push({
             tank_id: reading.tankId,
-            reading_date: new Date().toISOString().split('T')[0],
+            reading_date: readingDateStr,
             dipping_reading: reading.dippingReading,
             book_stock: tank.closing_book_stock,
             variance: variance,
@@ -193,10 +198,12 @@ class TankService {
             current_dipping: reading.dippingReading,
             variance: variance,
           });
+
+          const key = `${tank.station_id}-${tank.fuel_type}`;
+          totals.set(key, (totals.get(key) || 0) + reading.dippingReading);
         }
       }
 
-      // Insert dipping readings
       const { data: insertedReadings, error: readingsError } = await supabase
         .from('dipping_readings')
         .insert(readings)
@@ -204,7 +211,6 @@ class TankService {
 
       if (readingsError) throw readingsError;
 
-      // Update tanks
       for (const update of tankUpdates) {
         await supabase
           .from('tanks')
@@ -214,6 +220,19 @@ class TankService {
             updated_at: new Date().toISOString(),
           })
           .eq('id', update.id);
+      }
+
+      for (const [key, totalDip] of totals.entries()) {
+        const [stationId, fuelType] = key.split('-');
+        await supabase
+          .from('stock_levels')
+          .update({
+            current_stock: totalDip,
+            last_updated: new Date().toISOString(),
+            updated_by: recordedBy,
+          })
+          .eq('station_id', stationId)
+          .eq('product_type', fuelType);
       }
 
       return {
@@ -289,12 +308,10 @@ class TankService {
 
   // Get fuel type options
   getFuelTypeOptions(): { value: PumpFuelType; label: string; description: string }[] {
-    return [
-      { value: 'PMS', label: 'PMS', description: 'Premium Motor Spirit (Petrol)' },
-      { value: 'AGO', label: 'AGO', description: 'Automotive Gas Oil (Diesel)' },
-      { value: 'DPK', label: 'DPK', description: 'Dual Purpose Kerosene' },
-      { value: 'LPG', label: 'LPG', description: 'Liquefied Petroleum Gas' },
-    ];
+     return [
+       { value: 'PMS', label: 'PMS', description: 'Premium Motor Spirit (PMS)' },
+       { value: 'AGO', label: 'AGO', description: 'Automotive Gas Oil (AGO)' },
+     ];
   }
 }
 

@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Fuelr - Network Control</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-secondary-container": "#0f6d00",
+                    "surface-container-lowest": "#0e0e0e",
+                    "on-primary": "#432c00",
+                    "error": "#ffb4ab",
+                    "outline-variant": "#514532",
+                    "surface-bright": "#393939",
+                    "on-tertiary-fixed": "#1b1c1c",
+                    "on-primary-fixed": "#281900",
+                    "on-error": "#690005",
+                    "primary-fixed": "#ffdeac",
+                    "on-primary-fixed-variant": "#604100",
+                    "surface-variant": "#353534",
+                    "background": "#131313",
+                    "primary-fixed-dim": "#ffba38",
+                    "inverse-primary": "#7e5700",
+                    "secondary-container": "#2ff801",
+                    "tertiary": "#dfdddc",
+                    "on-primary-container": "#6b4900",
+                    "surface-dim": "#131313",
+                    "on-secondary-fixed": "#022100",
+                    "tertiary-fixed-dim": "#c8c6c6",
+                    "on-background": "#e5e2e1",
+                    "on-secondary": "#053900",
+                    "inverse-surface": "#e5e2e1",
+                    "secondary-fixed-dim": "#2ae500",
+                    "secondary": "#d7ffc5",
+                    "on-secondary-fixed-variant": "#095300",
+                    "surface": "#131313",
+                    "on-tertiary-container": "#4f4f4f",
+                    "error-container": "#93000a",
+                    "on-surface": "#e5e2e1",
+                    "surface-container": "#201f1f",
+                    "on-tertiary": "#303030",
+                    "surface-container-high": "#2a2a2a",
+                    "outline": "#9e8e78",
+                    "primary-container": "#ffb300",
+                    "tertiary-fixed": "#e4e2e1",
+                    "surface-tint": "#ffba38",
+                    "tertiary-container": "#c3c1c1",
+                    "on-surface-variant": "#d6c4ac",
+                    "inverse-on-surface": "#313030",
+                    "surface-container-low": "#1c1b1b",
+                    "secondary-fixed": "#79ff5b",
+                    "on-error-container": "#ffdad6",
+                    "primary": "#ffd79b",
+                    "surface-container-highest": "#353534",
+                    "on-tertiary-fixed-variant": "#474747"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "xs": "8px",
+                    "xl": "48px",
+                    "sm": "16px",
+                    "md": "24px",
+                    "base": "4px",
+                    "lg": "32px",
+                    "gutter-mobile": "12px",
+                    "margin-mobile": "20px"
+            },
+            "fontFamily": {
+                    "label-md": ["Inter"],
+                    "headline-lg": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "label-sm": ["Inter"],
+                    "body-md": ["Inter"],
+                    "headline-lg-mobile": ["Inter"],
+                    "headline-md": ["Inter"]
+            },
+            "fontSize": {
+                    "label-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                    "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                    "label-sm": ["12px", {"lineHeight": "16px", "fontWeight": "500"}],
+                    "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "headline-lg-mobile": ["28px", {"lineHeight": "34px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "headline-md": ["24px", {"lineHeight": "30px", "letterSpacing": "-0.01em", "fontWeight": "600"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: #121212;
+            color: #e5e2e1;
+            overflow: hidden;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glow-effect {
+            box-shadow: 0 0 20px rgba(255, 179, 0, 0.2);
+        }
+        .station-node {
+            animation: pulse 4s infinite ease-in-out;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 0.6; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.1); }
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="flex flex-col min-h-screen">
+<!-- Top Navigation (Shell Implementation) -->
+<header class="bg-background dark:bg-background text-primary dark:text-primary flex justify-end items-center w-full px-margin-mobile h-16 top-0 fixed z-50">
+<button class="text-label-md font-label-md text-on-surface-variant hover:opacity-80 transition-opacity duration-200">
+            Skip
+        </button>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-grow flex flex-col items-center justify-center px-margin-mobile pt-16 pb-xl">
+<!-- Hero Visual: Network Representation -->
+<div class="relative w-full max-w-sm aspect-square flex items-center justify-center mb-lg">
+<!-- Background Atmospheric Glow -->
+<div class="absolute inset-0 bg-primary/5 rounded-full blur-[100px]"></div>
+<!-- Central Node & Network Web -->
+<div class="relative z-10 w-64 h-64 border border-outline-variant/30 rounded-full flex items-center justify-center">
+<!-- Center Icon -->
+<div class="w-32 h-32 bg-surface-container rounded-xl flex items-center justify-center border border-primary-container/20 glow-effect relative">
+<span class="material-symbols-outlined text-[64px] text-primary-container" style="font-variation-settings: 'FILL' 1;">hub</span>
+<!-- Orbital Nodes (Representing Stations) -->
+<div class="absolute -top-4 -right-4 w-12 h-12 bg-surface-container-high border border-outline-variant rounded-lg flex items-center justify-center station-node" style="animation-delay: 0s;">
+<span class="material-symbols-outlined text-primary text-[24px]">local_gas_station</span>
+</div>
+<div class="absolute -bottom-6 -left-4 w-12 h-12 bg-surface-container-high border border-outline-variant rounded-lg flex items-center justify-center station-node" style="animation-delay: 1s;">
+<span class="material-symbols-outlined text-primary text-[24px]">ev_station</span>
+</div>
+<div class="absolute top-1/2 -left-8 w-10 h-10 bg-surface-container-high border border-outline-variant rounded-lg flex items-center justify-center station-node" style="animation-delay: 2s;">
+<span class="material-symbols-outlined text-primary text-[20px]">store</span>
+</div>
+</div>
+<!-- Subtle Connecting Lines -->
+<svg class="absolute inset-0 w-full h-full pointer-events-none opacity-20" viewbox="0 0 100 100">
+<line stroke="#ffb300" stroke-width="0.5" x1="50" x2="85" y1="50" y2="25"></line>
+<line stroke="#ffb300" stroke-width="0.5" x1="50" x2="20" y1="50" y2="80"></line>
+<line stroke="#ffb300" stroke-width="0.5" x1="50" x2="10" y1="50" y2="50"></line>
+</svg>
+</div>
+</div>
+<!-- Text Content -->
+<div class="text-center max-w-md space-y-md">
+<h1 class="text-headline-lg-mobile font-headline-lg-mobile text-on-background tracking-tight">
+                Network Control
+            </h1>
+<p class="text-body-md font-body-md text-on-surface-variant px-sm leading-relaxed">
+                Switch between 5+ fuel stations instantly in one central dashboard. Manage your entire retail footprint from anywhere.
+            </p>
+</div>
+</main>
+<!-- Bottom Navigation Shell -->
+<footer class="fixed bottom-0 w-full z-50 flex flex-col items-center gap-md px-margin-mobile pb-xl bg-background">
+<!-- Pagination Dots -->
+<div class="flex items-center gap-xs mb-sm">
+<div class="bg-primary text-on-primary rounded-full w-12 h-2 transition-all duration-300"></div>
+<div class="bg-surface-variant text-on-surface-variant rounded-full w-2 h-2"></div>
+<div class="bg-surface-variant text-on-surface-variant rounded-full w-2 h-2"></div>
+<div class="bg-surface-variant text-on-surface-variant rounded-full w-2 h-2"></div>
+</div>
+<!-- Primary Action -->
+<button class="w-full h-14 bg-primary-container text-on-primary font-label-md text-label-md rounded-lg flex items-center justify-center gap-sm hover:brightness-110 active:scale-[0.98] transition-all">
+            Next
+            <span class="material-symbols-outlined text-[20px]">arrow_forward</span>
+</button>
+</footer>
+<!-- Interactive Micro-interactions Script -->
+<script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const nextBtn = document.querySelector('button.bg-primary-container');
+            const skipBtn = document.querySelector('button.text-on-surface-variant');
+
+            // Simple click feedback
+            [nextBtn, skipBtn].forEach(btn => {
+                btn.addEventListener('click', () => {
+                    btn.classList.add('opacity-50');
+                    setTimeout(() => btn.classList.remove('opacity-50'), 150);
+                });
+            });
+
+            // Parallax effect on the station nodes
+            document.addEventListener('mousemove', (e) => {
+                const amount = 15;
+                const x = (e.clientX / window.innerWidth - 0.5) * amount;
+                const y = (e.clientY / window.innerHeight - 0.5) * amount;
+                const nodes = document.querySelectorAll('.station-node');
+                nodes.forEach((node, idx) => {
+                    const factor = (idx + 1) * 0.5;
+                    node.style.transform = `translate(${x * factor}px, ${y * factor}px)`;
+                });
+            });
+        });
+    </script>
+</body></html>
