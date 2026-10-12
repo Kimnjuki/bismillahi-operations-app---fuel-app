@@ -38,10 +38,11 @@ export interface CachedData {
   version: number;
 }
 
-class OfflineService {
+export class OfflineService {
   private isOnline: boolean = true;
   private syncInProgress: boolean = false;
   private syncInterval: ReturnType<typeof setInterval> | null = null;
+  private netInfoUnsubscribe: (() => void) | null = null;
   private listeners: ((isOnline: boolean) => void)[] = [];
 
   constructor() {
@@ -51,10 +52,8 @@ class OfflineService {
 
   // Initialize network status listener
   private async initializeNetworkListener() {
-    const netInfo = await NetInfo.fetch();
-    this.isOnline = netInfo.isConnected ?? false;
-
-    NetInfo.addEventListener(state => {
+    // Store the unsubscribe handle so we can remove the listener on destroy.
+    this.netInfoUnsubscribe = NetInfo.addEventListener(state => {
       const wasOnline = this.isOnline;
       this.isOnline = state.isConnected ?? false;
       
@@ -66,6 +65,9 @@ class OfflineService {
         }
       }
     });
+
+    const netInfo = await NetInfo.fetch();
+    this.isOnline = netInfo.isConnected ?? false;
   }
 
   // Notify listeners about network status changes
@@ -383,6 +385,11 @@ class OfflineService {
   destroy() {
     if (this.syncInterval) {
       clearInterval(this.syncInterval);
+      this.syncInterval = null;
+    }
+    if (this.netInfoUnsubscribe) {
+      this.netInfoUnsubscribe();
+      this.netInfoUnsubscribe = null;
     }
     this.listeners = [];
   }

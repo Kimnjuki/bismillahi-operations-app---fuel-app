@@ -10,7 +10,7 @@ module.exports = {
     '<rootDir>/ios/',
   ],
     transformIgnorePatterns: [
-      'node_modules/(?!(react-native|@react-native|@react-navigation|expo|@expo|expo-modules-core|expo-image-picker|@supabase|react-native-gesture-handler|react-native-screens|react-native-safe-area-context|@react-native-async-storage|@react-native-community|react-native-vector-icons|expo-crypto|expo-constants|expo-device)/)',
+      'node_modules/(?!(react-native|@react-native|@react-navigation|expo|@expo|expo-modules-core|expo-image-picker|@supabase|react-native-gesture-handler|react-native-screens|react-native-safe-area-context|@react-native-async-storage|@react-native-community|react-native-vector-icons|expo-crypto|expo-constants|expo-device|expo-secure-store)/)',
     ],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
   collectCoverageFrom: [
@@ -28,4 +28,9 @@ module.exports = {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
+  // Some services kick off async work (network listeners, auto-sync timers)
+  // that can still be settling when a worker finishes. forceExit makes Jest
+  // exit workers gracefully after the run instead of force-killing them and
+  // printing the "worker process has failed to exit gracefully" warning.
+  forceExit: true,
 };

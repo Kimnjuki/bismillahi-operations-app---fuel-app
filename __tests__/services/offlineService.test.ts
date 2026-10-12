@@ -1,4 +1,4 @@
-import { offlineService, OfflineOperation, SyncSettings } from '../../src/services/offlineService';
+import { OfflineService, OfflineOperation, SyncSettings, offlineService as offlineServiceSingleton } from '../../src/services/offlineService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 
@@ -11,11 +11,32 @@ const mockAsyncStorage = AsyncStorage as jest.Mocked<typeof AsyncStorage>;
 const mockNetInfo = NetInfo as jest.Mocked<typeof NetInfo>;
 
 describe('OfflineService', () => {
+  let offlineService: OfflineService;
+
   beforeEach(() => {
     jest.clearAllMocks();
     mockAsyncStorage.getItem.mockResolvedValue(null);
     mockAsyncStorage.setItem.mockResolvedValue();
     mockNetInfo.fetch.mockResolvedValue({ isConnected: true } as any);
+    // Return an unsubscribe handle from addEventListener so instances can be
+    // cleanly torn down in afterEach (mirrors the real NetInfo API).
+    mockNetInfo.addEventListener.mockReturnValue(jest.fn());
+    
+    // Create fresh instance for each test
+    offlineService = new OfflineService();
+  });
+
+  afterEach(() => {
+    // Tear down timers and the NetInfo subscription so handles don't leak
+    // between tests (prevents "worker process failed to exit gracefully").
+    offlineService.destroy();
+  });
+
+  afterAll(() => {
+    // The module also exports a singleton that starts an auto-sync timer in its
+    // constructor. Destroy it so its interval/listener don't keep the Jest
+    // worker alive after the suite finishes.
+    offlineServiceSingleton.destroy();
   });
 
   describe('Network Status', () => {
@@ -23,17 +44,21 @@ describe('OfflineService', () => {
       expect(offlineService.getNetworkStatus()).toBe(true);
     });
 
-    it('should notify listeners when network status changes', () => {
-      const listener = jest.fn();
-      const unsubscribe = offlineService.addNetworkListener(listener);
+    it('should notify listeners when network status changes', async () => {
+          const listener = jest.fn();
+          const unsubscribe = offlineService.addNetworkListener(listener);
 
-      // Simulate network change
-      const mockListener = mockNetInfo.addEventListener.mock.calls[0][0];
-      mockListener({ isConnected: false });
+          // Wait for async initialization to complete
+          await new Promise(process.nextTick);
+      
+          // Simulate network change
+          // Note: The addEventListener call is from initializeNetworkListener in the constructor
+          const mockListener = mockNetInfo.addEventListener.mock.calls[0][0];
+          mockListener({ isConnected: false } as any);
 
-      expect(listener).toHaveBeenCalledWith(false);
-      unsubscribe();
-    });
+          expect(listener).toHaveBeenCalledWith(false);
+          unsubscribe();
+        });
   });
 
   describe('Offline Queue', () => {
@@ -179,27 +204,32 @@ describe('OfflineService', () => {
 
   describe('Sync Operations', () => {
     it('should not sync when offline', async () => {
-      // Mock offline status
-      const mockListener = mockNetInfo.addEventListener.mock.calls[0][0];
-      mockListener({ isConnected: false });
+          // Mock offline status
+          // Note: The addEventListener call is from initializeNetworkListener in the constructor
+          await new Promise(process.nextTick);
+          const mockListener = mockNetInfo.addEventListener.mock.calls[0][0];
+          mockListener({ isConnected: false } as any);
 
-      const result = await offlineService.syncOfflineData();
+          const result = await offlineService.syncOfflineData();
 
-      expect(result).toEqual({ success: 0, failed: 0 });
-    });
+          expect(result).toEqual({ success: 0, failed: 0 });
+        });
 
     it('should not sync when already syncing', async () => {
-      // Start a sync operation
-      const syncPromise = offlineService.syncOfflineData();
+          // Start a sync operation
+          const syncPromise = offlineService.syncOfflineData();
       
-      // Try to start another sync
-      const result = await offlineService.syncOfflineData();
+          // Wait for initialization
+          await new Promise(process.nextTick);
 
-      expect(result).toEqual({ success: 0, failed: 0 });
+          // Try to start another sync
+          const result = await offlineService.syncOfflineData();
+
+          expect(result).toEqual({ success: 0, failed: 0 });
       
-      // Wait for the first sync to complete
-      await syncPromise;
-    });
+          // Wait for the first sync to complete
+          await syncPromise;
+        });
   });
 
   describe('Error Handling', () => {
@@ -226,6 +256,16 @@ describe('OfflineService', () => {
       offlineService.destroy();
 
       expect(clearIntervalSpy).toHaveBeenCalled();
+    });
+
+    it('should unsubscribe from NetInfo on destroy', () => {
+      const unsubscribe = mockNetInfo.addEventListener.mock.results[0]?.value as jest.Mock;
+      expect(unsubscribe).toBeDefined();
+
+      offlineService.destroy();
+
+      // The handle returned by NetInfo.addEventListener should be invoked
+      expect(unsubscribe).toHaveBeenCalled();
     });
   });
 });
