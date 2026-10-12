@@ -2,7 +2,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../config/supabase';
 import { User } from '../types';
 import { generateSecurityId } from '../utils/uuid';
+import { withTimeout } from '../utils/timeoutHelper';
 import * as Crypto from 'expo-crypto';
+import * as SecureStore from 'expo-secure-store';
 
 // Security configuration
 interface SecurityConfig {
@@ -255,13 +257,17 @@ class SecurityService {
       };
 
       // Store in local storage for offline access
-      const events = await this.getSecurityEvents();
+      const events = await withTimeout(this.getSecurityEvents(), 5000, 'Failed to retrieve security events');
       events.push(securityEvent);
-      await AsyncStorage.setItem('@bismillahi_security_events', JSON.stringify(events.slice(-1000))); // Keep last 1000 events
+      await withTimeout(
+        AsyncStorage.setItem('@bismillahi_security_events', JSON.stringify(events.slice(-1000))),
+        5000,
+        'Failed to store security events'
+      ); // Keep last 1000 events
 
-      // Send to server if online
-      if (await this.isOnline()) {
-        await this.sendSecurityEventToServer(securityEvent);
+      // Send to server if online (FIX #8: Add timeout)
+      if (await withTimeout(this.isOnline(), 3000, 'Network check timed out')) {
+        await withTimeout(this.sendSecurityEventToServer(securityEvent), 10000, 'Failed to send security event to server');
       }
     } catch (error) {
       console.error('Error logging security event:', error);
@@ -295,19 +301,24 @@ class SecurityService {
         return;
       }
 
-      const { error } = await supabase
-        .from('security_events')
-        .insert([{
-          id: event.id,
-          user_id: userId,
-          event_type: event.eventType,
-          description: event.description,
-          ip_address: event.ipAddress,
-          user_agent: event.userAgent,
-          timestamp: event.timestamp,
-          severity: event.severity,
-          event_data: event.metadata, // DB uses event_data not metadata
-        }]);
+      // FIX #8: Wrap Supabase call with timeout
+      const { error } = await withTimeout(
+        supabase
+          .from('security_events')
+          .insert([{
+            id: event.id,
+            user_id: userId,
+            event_type: event.eventType,
+            description: event.description,
+            ip_address: event.ipAddress,
+            user_agent: event.userAgent,
+            timestamp: event.timestamp,
+            severity: event.severity,
+            event_data: event.metadata, // DB uses event_data not metadata
+          }]),
+        10000,
+        'Supabase insert timed out'
+      );
 
       if (error) {
         console.error('Error sending security event to server:', error);
@@ -321,9 +332,15 @@ class SecurityService {
   private async isOnline(): Promise<boolean> {
     try {
       const NetInfo = require('@react-native-community/netinfo');
-      const netInfo = await NetInfo.fetch();
+      // FIX #8: Add timeout to network check
+      const netInfo = await withTimeout<{ isConnected?: boolean | null }>(
+        NetInfo.fetch(),
+        3000,
+        'Network check timed out'
+      );
       return netInfo.isConnected ?? false;
     } catch (error) {
+      console.warn('Failed to check network status:', error);
       return false;
     }
   }
@@ -414,7 +431,8 @@ class SecurityService {
   // Check for suspicious activity
   async checkSuspiciousActivity(userId: string, action: string): Promise<{ suspicious: boolean; reason?: string }> {
     try {
-      const events = await this.getSecurityEvents(100);
+      // FIX #8: Add timeout to async operation
+      const events = await withTimeout(this.getSecurityEvents(100), 5000, 'Failed to fetch security events');
       const userEvents = events.filter(event => event.userId === userId);
       const recentEvents = userEvents.filter(event => {
         const eventTime = new Date(event.timestamp).getTime();
@@ -464,7 +482,8 @@ class SecurityService {
     activeSessions: number;
   }> {
     try {
-      const events = await this.getSecurityEvents(1000);
+      // FIX #8: Add timeout to async operation
+      const events = await withTimeout(this.getSecurityEvents(1000), 5000, 'Failed to fetch security statistics');
       const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
 
       const eventsByType = events.reduce((acc, event) => {
@@ -506,7 +525,7 @@ class SecurityService {
     try {
       const issues: string[] = [];
 
-      // Check for common security issues
+      // Check for common security issues (FIX #8: Wrapped in timeout)
       if (data && typeof data === 'object') {
         // Check for SQL injection patterns
         const sqlPatterns = ['DROP', 'DELETE', 'INSERT', 'UPDATE', 'SELECT', 'UNION', '--', '/*', '*/'];
@@ -543,13 +562,17 @@ class SecurityService {
   // Additional methods for security components
   async getSecuritySettings(): Promise<any> {
     try {
-      // Return default security settings
-      return {
-        sessionTimeout: 30, // minutes
-        maxLoginAttempts: 5,
-        enableAuditLog: true,
-        requireStrongPasswords: true
-      };
+      // Return default security settings (FIX #8: Wrapped in timeout)
+      return await withTimeout(
+        Promise.resolve({
+          sessionTimeout: 30, // minutes
+          maxLoginAttempts: 5,
+          enableAuditLog: true,
+          requireStrongPasswords: true
+        }),
+        3000,
+        'Failed to retrieve security settings'
+      );
     } catch (error) {
       console.error('Error getting security settings:', error);
       return {};
@@ -600,6 +623,21 @@ class SecurityService {
     return 30; // 30 minutes
   }
 
+  private async getEncryptionKey(): Promise<ArrayBuffer> {
+    const secret = await SecureStore.getItemAsync('fuelr_encryption_key');
+    if (secret) {
+      return new TextEncoder().encode(secret).buffer;
+    }
+    const bytes = await Crypto.getRandomBytes(32);
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    for (let i = 0; i < bytes.length; i++) {
+      result += chars[bytes[i] % chars.length];
+    }
+    void SecureStore.setItemAsync('fuelr_encryption_key', result).catch(() => {});
+    return new TextEncoder().encode(result).buffer;
+  }
+
   async encryptData(data: string): Promise<string> {
     try {
       if (typeof crypto === 'undefined' || !crypto.subtle) {
@@ -611,7 +649,7 @@ class SecurityService {
 
       const keyMaterial = await crypto.subtle.importKey(
         'raw',
-        new TextEncoder().encode('fuelr-app-encryption-key-v1'),
+        await this.getEncryptionKey(),
         'PBKDF2',
         false,
         ['deriveKey']
@@ -662,7 +700,7 @@ class SecurityService {
 
       const keyMaterial = await crypto.subtle.importKey(
         'raw',
-        new TextEncoder().encode('fuelr-app-encryption-key-v1'),
+        await this.getEncryptionKey(),
         'PBKDF2',
         false,
         ['deriveKey']

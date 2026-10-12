@@ -1,4 +1,5 @@
 import { supabase } from '../config/supabase';
+import { NotificationDataService } from './centralizedDataService';
 
 export type NotificationType = 
   | 'stock_alert' 
@@ -107,17 +108,16 @@ class NotificationService {
     this.listeners.forEach(listener => listener(this.notifications));
   }
 
-  // Load notifications from database
+  // Load notifications from database (using centralized service)
   async loadNotifications(): Promise<Notification[]> {
     try {
-      const { data, error } = await supabase
-        .from('notifications')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(50);
+      const { data, error } = await NotificationDataService.getNotifications({
+        limit: 50,
+        unreadOnly: false,
+      });
 
       if (error) {
-        console.warn('Notifications load skipped:', error.message || error);
+        console.warn('Notifications load skipped:', error);
         return [];
       }
 
@@ -496,16 +496,14 @@ class NotificationService {
     }
   }
 
-  // Mark notification as read
+  // Mark notification as read (using centralized service)
   async markAsRead(notificationId: string): Promise<void> {
     try {
-      const { error } = await supabase
-        .from('notifications')
-        .update({ is_read: true })
-        .eq('id', notificationId);
+      const { error } = await NotificationDataService.markAsRead(notificationId);
 
       if (error) {
         console.error('Error marking notification as read:', error);
+        return;
       }
 
       // Update local state
@@ -523,11 +521,12 @@ class NotificationService {
     try {
       const { error } = await supabase
         .from('notifications')
-        .update({ is_read: true })
+        .update({ is_read: true, updated_at: new Date().toISOString() })
         .eq('is_read', false);
 
       if (error) {
         console.error('Error marking all notifications as read:', error);
+        return;
       }
 
       // Update local state
@@ -537,6 +536,8 @@ class NotificationService {
       console.error('Error marking all notifications as read:', error);
     }
   }
+
+
 
   // Create a new notification
   async createNotification(notification: Omit<Notification, 'id' | 'timestamp' | 'isRead'>): Promise<void> {
