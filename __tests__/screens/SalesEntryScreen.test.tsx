@@ -1,18 +1,27 @@
 import React from 'react';
 import { fireEvent, waitFor } from '@testing-library/react-native';
-import { render, createMockUser } from '../utils/testUtils';
+import { render } from '../utils/testUtils';
 import SalesEntryScreen from '../../src/screens/SalesEntryScreen';
 
-// Mock the auth context - using jest.requireActual to access the import inside mock factory
-jest.mock('../../src/context/AuthContext', () => {
-  const { createMockUser: mockUserFactory } = jest.requireActual('../utils/testUtils');
-  return {
-    useAuth: () => ({
-      appUser: mockUserFactory(),
-      hasPermission: jest.fn(() => true),
-    }),
-  };
-});
+// Mock the auth context. Define the mock user inline to avoid a circular
+// dependency through testUtils (which imports AuthContext, which is mocked here).
+const mockAppUser = {
+  id: 'test-user-id',
+  email: 'test@example.com',
+  full_name: 'Test User',
+  role: 'cashier' as const,
+  is_active: true,
+  created_at: '2024-01-01T00:00:00Z',
+  updated_at: '2024-01-01T00:00:00Z',
+};
+
+jest.mock('../../src/context/AuthContext', () => ({
+  useAuth: () => ({
+    appUser: mockAppUser,
+    hasPermission: jest.fn(() => true),
+  }),
+  AuthProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
 
 // Mock navigation
 const mockNavigation = {
@@ -23,6 +32,7 @@ const mockNavigation = {
 
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => mockNavigation,
+  NavigationContainer: ({ children }: { children: React.ReactNode }) => children,
 }));
 
 describe('SalesEntryScreen', () => {
@@ -30,86 +40,51 @@ describe('SalesEntryScreen', () => {
     jest.clearAllMocks();
   });
 
-  it('should render pump sales form by default', () => {
-    const { getByText } = render(<SalesEntryScreen />);
-    // Default station is ISSIRO STATION (first in STATIONS array) which is a pump station
-    expect(getByText('Create Sales Receipt')).toBeTruthy();
-    expect(getByText('Station')).toBeTruthy();
+  it('should render the batch pump sales form by default', () => {
+    const { getByText, getAllByText } = render(<SalesEntryScreen />);
+    // Header + core labels present in the current batch-sales UI
+    expect(getByText('Batch Sales Entry')).toBeTruthy();
     expect(getByText('Customer')).toBeTruthy();
     expect(getByText('Payment')).toBeTruthy();
     expect(getByText('Ref No')).toBeTruthy();
-    expect(getByText('ITEM')).toBeTruthy();
-    expect(getByText('QTY (LITERS)')).toBeTruthy();
-    expect(getByText('RATE (CDF)')).toBeTruthy();
-    expect(getByText('Add Item')).toBeTruthy();
+    // "Station" appears both as an info label and a per-transaction field label
+    expect(getAllByText('Station').length).toBeGreaterThan(0);
+    // The default transaction card is a pump sale
+    expect(getByText('PUMP SALE')).toBeTruthy();
+    expect(getByText('Volume (Liters)')).toBeTruthy();
+    expect(getByText('Price/Liter (CDF)')).toBeTruthy();
+    // Action buttons
+    expect(getByText('Submit Batch (1 transactions)')).toBeTruthy();
+    expect(getByText('Save Draft')).toBeTruthy();
+    expect(getByText('Print')).toBeTruthy();
   });
 
-  it('should switch to drum sales form when station is changed to a drum station', () => {
+  it('should add another pump transaction when "Add Pump Transaction" is pressed', () => {
     const { getByText } = render(<SalesEntryScreen />);
-    // Find the station selector and change it to a drum station (e.g., DEPOT ISSIRO)
-    const stationDropdown = getByText('ISSIRO STATION'); // Assuming first station is ISSIRO STATION
-    fireEvent.press(stationDropdown);
-    // The station selector is a TouchableOpacity that cycles through stations.
-    // We need to press it until we get to a drum station.
-    // Since we don't know the exact order, we will press it a few times and check for drum station text.
-    // We know DRUM_STATIONS are ['DEPOT ISSIRO', 'DUNGU STATION'].
-    // We'll press until we see one of them.
-    let foundDrumStation = false;
-    for (let i = 0; i < 10; i++) {
-      fireEvent.press(stationDropdown);
-      if (getByText('DEPOT ISSIRO', { exact: false }) || getByText('DUNGU STATION', { exact: false })) {
-        foundDrumStation = true;
-        break;
-      }
-    }
-    expect(foundDrumStation).toBe(true);
-    // Now check that the form shows drum sales inputs
-    expect(getByText('ITEM')).toBeTruthy();
-    expect(getByText('NUMBER OF DRUMS')).toBeTruthy();
-    expect(getByText('RATE (CDF)')).toBeTruthy();
-    // The pump-specific inputs should not be present
-    expect(() => getByText('QTY (LITERS)')).toThrow(); // This will throw if not found
+    // Starts with a single transaction
+    expect(getByText('Submit Batch (1 transactions)')).toBeTruthy();
+
+    fireEvent.press(getByText('Add Pump Transaction'));
+
+    // After adding, the submit button reflects two transactions
+    expect(getByText('Submit Batch (2 transactions)')).toBeTruthy();
   });
 
-  it('should switch back to pump sales form when station is changed to a pump station', () => {
+  it('should submit the batch and report success', async () => {
+    const alertSpy = jest.spyOn(require('react-native').Alert, 'alert').mockImplementation(() => {});
     const { getByText } = render(<SalesEntryScreen />);
-    // First, change to a drum station (as above)
-    const stationDropdown = getByText('ISSIRO STATION');
-    let foundDrumStation = false;
-    for (let i = 0; i < 10; i++) {
-      fireEvent.press(stationDropdown);
-      if (getByText('DEPOT ISSIRO', { exact: false }) || getByText('DUNGU STATION', { exact: false })) {
-        foundDrumStation = true;
-        break;
-      }
-    }
-    expect(foundDrumStation).toBe(true);
-    // Now change back to a pump station by continuing to cycle
-    let foundPumpStation = false;
-    for (let i = 0; i < 10; i++) {
-      fireEvent.press(stationDropdown);
-      // Check if we are back to a pump station (e.g., ISSIRO STATION)
-      if (getByText('ISSIRO STATION', { exact: false })) {
-        foundPumpStation = true;
-        break;
-      }
-    }
-    expect(foundPumpStation).toBe(true);
-    // Now check that the form shows pump sales inputs
-    expect(getByText('ITEM')).toBeTruthy();
-    expect(getByText('QTY (LITERS)')).toBeTruthy();
-    expect(getByText('RATE (CDF)')).toBeTruthy();
-    // The drum-specific inputs should not be present
-    expect(() => getByText('NUMBER OF DRUMS')).toThrow();
-  });
 
-  it('should show validation errors for empty required fields', async () => {
-    const { getByText } = render(<SalesEntryScreen />);
-    const submitButton = getByText('Submit Receipt');
-    fireEvent.press(submitButton);
-    // Wait for validation error
+    // The default transaction already has a pump attendant assigned,
+    // so submitting the batch should succeed.
+    fireEvent.press(getByText('Submit Batch (1 transactions)'));
+
     await waitFor(() => {
-      expect(getByText('Quantity cannot be negative')).toBeTruthy();
+      expect(alertSpy).toHaveBeenCalledWith(
+        'Batch Submitted Successfully',
+        expect.stringContaining('Transactions: 1')
+      );
     });
+
+    alertSpy.mockRestore();
   });
 });
